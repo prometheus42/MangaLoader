@@ -111,6 +111,49 @@ class Image(object):
 
 
 # -------------------------------------------------------------------------------------------------
+#  PathBuilder class
+# -------------------------------------------------------------------------------------------------
+class PathBuilder(object):
+
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
+
+    def get_manga_dir(self, manga):
+        if type(manga) == Manga:
+            return os.path.join(self.base_dir, manga.name)
+        elif type(manga) == str:
+            return os.path.join(self.base_dir, manga)
+        else:
+            logger.error('Wrong type of parameter "manga"!')
+
+    def get_chapter_dir(self, chapter):
+        return os.path.join(self.get_manga_dir(chapter.manga), '{name} {no:03d}'.format(name=chapter.manga, no=chapter.chapterNo))
+
+    def get_image_path(self, image, include_extension=False):
+        """
+        Builds the path to save the downloaded image to. If the keyword parameter
+        include_extension is False, the resulting image path contains no file
+        extension and it can be added later depending on the header information
+        of the HTTP response.
+        """
+        if include_extension:
+            imageExtension = '.' + os.path.splitext(image.imageUrl)
+        else:
+            imageExtension = ''
+        return os.path.join(self.get_chapter_dir(image.chapter),
+                            '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo,Ext=imageExtension))
+
+    def find_next_image(self, start_with_manga, start_with_chapter):
+        chapter_path = self.get_chapter_dir(start_with_chapter)
+        for i in range(20):
+            #dir_name = '{manga} {chapter:03d}'.format(manga=start_with_manga.name, chapter=start_with_chapter.chapterNo)
+            #path = os.path.abspath(os.path.join(self.base_dir, start_with_manga.name,
+            #                                    dir_name, '{no:03d}.jpg'.format(no=i)))
+            path = os.path.abspath(os.path.join(chapter_path, '{no:03d}.jpeg'.format(no=i)))
+            yield path
+
+
+# -------------------------------------------------------------------------------------------------
 #  Loader class
 # -------------------------------------------------------------------------------------------------
 class Loader(object):
@@ -118,6 +161,7 @@ class Loader(object):
     def __init__(self, loaderPlugin, destDir):
         self.loaderPlugin = loaderPlugin
         self.destDir = destDir
+        self.path_builder = PathBuilder(destDir)
         self.manga_list = None
         self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX,
                                                     loaderPlugin.__class__.__name__,
@@ -231,8 +275,8 @@ class Loader(object):
             if chapter == None:
                 # FIXME: Do we want the program to exit if a wrong chapter no is given?
                 raise RuntimeError('Unable to retrieve chapter ' + str(chapter_no) + ' for manga ' + str(manga))
-            manga_dir = self.get_manga_dir(manga)
-            chapter_dir = self.get_chapter_dir(chapter)
+            manga_dir = self.path_builder.get_manga_dir(manga)
+            chapter_dir = self.path_builder.get_chapter_dir(chapter)
             MangaZipper.create_zip(chapter_dir, manga_dir)
             logger.info('cbz: "' + str(chapter) + '"')
 
@@ -246,32 +290,11 @@ class Loader(object):
 
     def load_image(self, image):
         # calculate destination path and call store_file_on_disk()
-        if self.store_file_on_disk(image.image_url, self.get_image_path(image)) == False:
+        if self.store_file_on_disk(image.image_url, self.path_builder.get_image_path(image)) == False:
             return False
         logger.info('load: "' + str(image) + '"')
         print('load: "' + str(image) + '"')
         return True
-
-    def get_manga_dir(self, manga):
-        if type(manga) == Manga:
-            return os.path.join(self.destDir, manga.name)
-        elif type(manga) == str:
-            return os.path.join(self.destDir, manga)
-        else:
-            logger.error('Wrong type of parameter "manga"!')
-
-    def get_chapter_dir(self, chapter):
-        return os.path.join(self.get_manga_dir(chapter.manga), '{name} {no:03d}'.format(name=chapter.manga, no=chapter.chapterNo))
-
-    def get_image_path(self, image):
-        """
-        Builds the path to save the downloaded image to. It contains no file
-        extension, because it is later added depending on the header
-        information of the HTTP response.
-        """
-        imageExtension = '' # '.' + os.path.splitext(image.imageUrl)
-        return os.path.join(self.get_chapter_dir(image.chapter),
-                            '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo,Ext=imageExtension))
 
     def store_file_on_disk(self, source, dest):
         # create directories first
@@ -341,7 +364,7 @@ class Loader(object):
         logger.debug('zipChapter({}, {})'.format(name, chapterNo))
         manga = Manga(name)
         chapter = Chapter(manga, chapterNo)
-        if MangaZipper.createZip(self.get_chapter_dir(chapter), self.get_manga_dir(manga)):
+        if MangaZipper.createZip(self.path_builder.get_chapter_dir(chapter), self.path_builder.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             print('cbz: "' + str(chapter) + '"')
             return True
@@ -349,7 +372,7 @@ class Loader(object):
 
     def zipChapter2(self, manga, chapter):
         logger.debug('zipChapter({}, {})'.format(manga.name, chapter.chapterNo))
-        if MangaZipper.createZip(self.get_chapter_dir(chapter), self.get_manga_dir(manga)):
+        if MangaZipper.createZip(self.path_builder.get_chapter_dir(chapter), self.path_builder.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             print('cbz: "' + str(chapter) + '"')
             return True
@@ -407,7 +430,7 @@ class Loader(object):
 
     def loadImage(self, image):
         # calculate destination path and call store_file_on_disk()
-        if self.store_file_on_disk(image.imageUrl, self.get_image_path(image)) == False:
+        if self.store_file_on_disk(image.imageUrl, self.path_builder.get_image_path(image)) == False:
             return False
         logger.info('load: "{}"'.format(image))
         print('load: "{}"'.format(image))

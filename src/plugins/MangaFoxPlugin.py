@@ -168,6 +168,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
         logger.debug('URL for image found: {}'.format(url))
         return True
 
+    @memoized
     def getListOfChapters(self, manga):
         """Gets list of all chapters currently available for a given manga.
 
