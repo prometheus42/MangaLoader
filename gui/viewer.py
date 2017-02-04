@@ -75,13 +75,13 @@ class ImageView(QtGui.QWidget):
         grid.addWidget(self.previous_button, 1, 0, QtCore.Qt.AlignCenter)
         # add image label
         self.image_label = QtGui.QLabel(self)
-        #self.image = QtGui.QPixmap('./Coppelion/Coppelion 003/003.jpg')
-        #self.scaled_image = self.image.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio)
-        #self.image_label.setPixmap(self.scaled_image)
-        #self.image_label.setScaledContents(True)
-        self.image_label.setGeometry(10, 10, 400, 100)
+        #self.image_label.setGeometry(10, 10, 400, 100)
         path_to_image = next(self.image_switcher)
-        self.image_label.setPixmap(QtGui.QPixmap(path_to_image))
+        pixmap = QtGui.QPixmap(path_to_image)
+        #scaledPixmap = pixmap.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio)
+        #self.image_label.setPixmap(scaledPixmap)
+        self.image_label.setPixmap(pixmap)
+        self.image_label.setScaledContents(True)
         grid.addWidget(self.image_label, 1, 1, QtCore.Qt.AlignCenter | QtCore.Qt.AlignHCenter)
         # add next button
         self.next_button = QtGui.QPushButton('Next')
@@ -95,12 +95,34 @@ class ImageView(QtGui.QWidget):
         """Sets all signals and slots for this widget."""
         self.next_button.clicked.connect(self.on_next_image)
         self.previous_button.clicked.connect(self.on_previous_image)
+        # TODO: Handle mouse clicks on image label.
+
+    def keyPressEvent(self, event):
+        """
+        Handle key events for switching to next and previous page.
+        """
+        if event.isAutoRepeat():
+            return
+        # get key code and modifiers that were pressed
+        modifiers = event.modifiers()
+        key = event.key()
+        if key == QtCore.Qt.Key_N:
+            self.on_next_image()
+        elif key == QtCore.Qt.Key_P:
+            self.on_previous_image()
+        elif key == QtCore.Qt.Key_Escape:
+            self.on_next_image()
+        elif key == QtCore.Qt.Key_Space:
+            self.on_next_image()
 
     def on_next_image(self):
-        path_to_image = next(self.image_switcher)
-        logger.info('Switching to next image: {}.'.format(path_to_image))
-        self.image_label.setPixmap(QtGui.QPixmap(path_to_image))
-        self.update()
+        try:
+            path_to_image = next(self.image_switcher)
+            logger.info('Switching to next image: {}.'.format(path_to_image))
+            self.image_label.setPixmap(QtGui.QPixmap(path_to_image))
+        except StopIteration:
+            logger.warn('Reached end of manga.')
+            # TODO: Show message box!
     
     def on_previous_image(self):
         logger.info('Switching to previous image.')

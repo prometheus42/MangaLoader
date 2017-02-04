@@ -144,13 +144,21 @@ class PathBuilder(object):
                             '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo,Ext=imageExtension))
 
     def find_next_image(self, start_with_manga, start_with_chapter):
-        chapter_path = self.get_chapter_dir(start_with_chapter)
-        for i in range(20):
-            #dir_name = '{manga} {chapter:03d}'.format(manga=start_with_manga.name, chapter=start_with_chapter.chapterNo)
-            #path = os.path.abspath(os.path.join(self.base_dir, start_with_manga.name,
-            #                                    dir_name, '{no:03d}.jpg'.format(no=i)))
-            path = os.path.abspath(os.path.join(chapter_path, '{no:03d}.jpeg'.format(no=i)))
-            yield path
+        """
+        Finds path of the next image that should be shown. After a given
+        chapter of a series is finished, the next image is automatically from
+        the following chapter.
+        """
+        # TODO: Implement reversing direction to get to previous image.
+        while True:
+            chapter_path = self.get_chapter_dir(start_with_chapter)
+            # TODO: Check whether to filter for file type/extension.
+            for path, dirs, files in os.walk(chapter_path):
+                for f in sorted(files):
+                    path = os.path.abspath(os.path.join(chapter_path, f))
+                    yield path
+            # TODO: Handle this better!!!
+            start_with_chapter.chapterNo += 1
 
 
 # -------------------------------------------------------------------------------------------------
