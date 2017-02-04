@@ -29,6 +29,7 @@ class Manga(object):
         self.chapterList = []
         self.mangaURL = ''
         self.internalName = ''
+        self.is_open = None
 
     def __str__(self):
         return str(self.name)
@@ -49,6 +50,8 @@ class Chapter(object):
         self.chapterTitle = ''
         self.chapterURL = ''
         self.imageList = []
+        self.text = ''
+        self.title = ''
 
     def __str__(self):
         if self.manga != None:

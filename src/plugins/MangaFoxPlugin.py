@@ -4,8 +4,9 @@ import re
 import logging
 from PIL import Image
 
+from bs4 import BeautifulSoup
+
 import src.PluginBase as PluginBase
-from src.PluginBase import find_re_in_site
 from src.MangaBase import Manga
 from src.MangaBase import Chapter
 from src.helper import memoized
@@ -29,9 +30,15 @@ class MangaFoxPlugin(PluginBase.PluginBase):
         self.__list_of_found_chapter_URLs = {}
         self.__last_found_image_URL = ''
 
+
     def getImage(self, image):
-        # get url for chapter and fix it for given image number
-        # (http://mangafox.me/manga/coppelion/v19/c185/1.html)
+        """
+        Gets the URL for an image by parsing the site. Does not download
+        the image file itself!
+        
+        :param image: Image object containing a valid URL to the chapters
+                      first page.
+        """
         if image.chapter.chapterURL:
             chapterURL = image.chapter.chapterURL
         else:
@@ -47,57 +54,54 @@ class MangaFoxPlugin(PluginBase.PluginBase):
             return False
 
         logger.debug('Start parsing...')
-        parser = PluginBase.ParserBase(('div', 'class', 'read_img'), ('img', 'src'))
-        parser.feed(result)
-
-        logger.debug('targetCount = ' + str(parser.targetCount))
-        if parser.targetCount < 1:
+        soup = BeautifulSoup(result, 'html.parser')
+        # TODO: Check whether to use find_all() instead of find().
+        found_tag = soup.find('img', id='image')
+        if found_tag == None:
             logger.info('No image found in MangaFox site, maybe the chapter is not available.')
             return False
-
-        if parser.targetCount > 1:
-            logger.warning('{} images found in MangaFox site, maybe the chapter is not available.'.format(parser.targetCount))
-            return False
-
-        if parser.targetValue == '':
-            logger.warning('No valid image url found in MangaFox site.')
-            return False
+        else:
+            url = found_tag['src']
 
         # check if this time the same URL was found as last time, because
         # MangaFox shows last image of chapter when the given image number is
         # too high
         # TODO: Fix this by determine how many chapters there are!
-        if self.__last_found_image_URL == parser.targetValue:
+        if self.__last_found_image_URL == url:
             return False
 
-        image.imageUrl = parser.targetValue
-        self.__last_found_image_URL = parser.targetValue
-        logger.debug('imageUrl found: {}'.format(parser.targetValue))
-
+        image.imageUrl = url
+        self.__last_found_image_URL = url
+        logger.debug('URL for image found: {}'.format(url))
         return True
 
     def getListOfChapters(self, manga):
         """Gets list of all chapters currently available for a given manga.
-
-        Regular expression was stolen from Bartosz Foder, licensed under BSD
-        License (http://github.com/PImpek/MFD)!
 
         :param manga: describing the manga for which chapters should be found
                       including its name and the link of the main site
         :return: a list of chapters with all necessary information like their URLs
         """
         url = manga.mangaURL
+        result = PluginBase.loadURL(url)
+        #if result is None:
+        #    return []
         logger.info('Looking for chapters of manga "{}" ({}).'.format(manga.name, manga.mangaURL))
-        logger.info('Finding chapters...')
-        regex = r"<a href=\"((?:https?://)?(?:[\da-z\.\-/\_]+))\"\s+title=\"(?:[A-Za-z0-9\s\\/\-\_!@,\.\*\+]+)\"\s+class=\"tips\">([A-Za-z0-9\s\\/\-\_!@,\.\*\+]+)\s*</a>"
-        link_list = find_re_in_site(url, regex)
-        logger.info('Found {} chapters.'.format(len(link_list)))
         list_of_chapters = []
-        for link, name in link_list:
-            number = int(re.findall('\d+$', name)[0])
-            chapter = Chapter(manga.name, number)
-            chapter.chapterURL = link
-            list_of_chapters.append(chapter)
+        soup = BeautifulSoup(result, 'html.parser')
+        for ul in soup.findAll('ul', class_='chlist'):
+            for a in ul.findAll('a', class_='tips'):
+                link = a['href']
+                text = a.get_text()
+                number = text.rsplit(None, 1)[-1]
+                title = a.find_next_sibling('span', class_='title').get_text()
+                # create Chapter object
+                chapter = Chapter(manga.name, number)
+                chapter.chapterURL = link
+                chapter.text = text
+                chapter.title = title
+                list_of_chapters.append(chapter)
+        logger.info('Found {} chapters.'.format(len(list_of_chapters)))
         return list_of_chapters
 
     @memoized
@@ -132,24 +136,30 @@ class MangaFoxPlugin(PluginBase.PluginBase):
     def getListOfMangas(self):
         url = '/'.join((self.__domain, 'manga'))
         result = PluginBase.loadURL(url)
-        if result is None:
-            return ()
+        #if result is None:
+        #    return []
         print('Finding mangas...')
         logger.debug('Finding mangas...')
-        parser = PluginBase.ParserBase(('div', 'class', 'manga_list'), ('a', 'href'))
-        parser.feed(result)
-        print('Found {} mangas on site!'.format(parser.targetCount))
-        if parser.targetCount > 1:
-            list_of_all_mangas = []
-            for name, link in zip(parser.targetData, parser.targetValues):
+        
+        # define function to classify if HTML tag contains a manga series
+        def is_manga_tag(css_class):
+            return css_class is not None and 'series_preview' in css_class
+        
+        list_of_all_mangas = []
+        soup = BeautifulSoup(result, 'html.parser')
+        for div in soup.findAll('div', class_='manga_list'):
+            for a in div.findAll('a', class_=is_manga_tag):
+                link = a['href']
+                is_open = 'manga_open' in a['class']
+                name = a.get_text()
+                # create Manga object
                 m = Manga(name)
                 m.mangaURL = link
-                list_of_all_mangas.append(m)
-            # remove first element because this is not actually a manga :-)
-            del list_of_all_mangas[0]
-        else:
-            logger.warning('No mangas found on site.')
+                m.is_open = is_open
+                list_of_all_mangas.append(m)        
+        print('Found {} mangas on site!'.format(parser.targetCount))
         return list_of_all_mangas
+
 
     def postprocessImage(self, filename):
         logger.debug('Cropping image file to delete ads.')
