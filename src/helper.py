@@ -4,9 +4,9 @@ import functools
 
 
 class memoized(object):
-    """Decorator. Caches a function's return value each time it is called.
-    If called later with the same arguments, the cached value is returned
-    (not reevaluated).
+    """
+    Caches a function's return value each time it is called. If called later
+    with the same arguments, the cached value is returned (not reevaluated).
 
     Source: https://wiki.python.org/moin/PythonDecoratorLibrary
     """
@@ -37,7 +37,9 @@ class memoized(object):
 
 @memoized
 def module_exists(module_name):
-    """Checks whether a module defined by its name can be imported."""
+    """
+    Checks whether a module defined by its name can be imported.
+    """
     try:
         __import__(module_name)
     except ImportError:

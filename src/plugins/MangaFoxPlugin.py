@@ -18,7 +18,7 @@ from src.helper import memoized
 logger = logging.getLogger('MangaLoader.MangaFoxPlugin')
 
 BASE_URL = 'http://mangafox.me/'
-
+MANGA_LIST_URL = BASE_URL + 'manga/'
 
 # -------------------------------------------------------------------------------------------------
 #  Plugin class
@@ -29,8 +29,101 @@ class MangaFoxPlugin(PluginBase.PluginBase):
         self.__domain = BASE_URL
         self.__list_of_found_chapter_URLs = {}
         self.__last_found_image_URL = ''
-
-
+    
+    @memoized
+    def get_manga_list(self):
+        response = load_url(MANGA_LIST_URL)
+        return self._parse_manga_list(response)
+    
+    def _parse_manga_list(self, data):
+        doc = BeautifulSoup(data, 'html.parser')
+        
+        result = []
+        for div in doc.find_all('div', class_='manga_list'):
+            for li in div.find_all('li'):
+                for a in li.find_all('a'):
+                    if a.string and a['class'] != 'top':
+                        manga = Manga(a.string)
+                        manga.url = a['href']
+                        result.append(manga)
+        return result
+    
+    @memoized
+    def load_chapter_list(self, manga):
+        response = load_url(manga.url)
+        for chapter in self._parse_chapter_list(response):
+            manga.add_chapter(chapter)
+    
+    def _parse_chapter_list(self, data):
+        doc = BeautifulSoup(data, 'html.parser')
+        result = []
+        for div in doc.find_all('div', id='chapters'):
+            for ul in div.find_all('ul', class_='chlist'):
+                for li in ul.find_all('li'):
+                    inner_div = li.find('div')
+                    a = inner_div.find('a', class_='tips')
+                    span = inner_div.find('span', class_='title nowrap')
+                    
+                    words = a.string.split()
+                    number_string = words[len(words)-1]
+                    if number_string.isdigit(): # ignore 'half' chapters
+                        chapter = Chapter(int(number_string))
+                        chapter.url = a['href']
+                        if span != None:
+                            chapter.title = span.string
+                        result.append(chapter)
+        return result
+    
+    @memoized
+    def load_image_list(self, chapter):
+        response = load_url(chapter.url)
+        for image in self._parse_image_list(chapter.url, response):
+            chapter.add_image(image)
+    
+    def _parse_image_list(self, url, data):
+        doc = BeautifulSoup(data, 'html.parser')
+        result = []
+        
+        div = doc.find('div', class_='r m')
+        
+        options = []
+        select = div.find('select', class_='m')
+        for option in select.find_all():
+            value = option['value']
+            if value is not None and value.isdigit():
+                options.append(int(value))#
+        
+        base_url = url.rsplit('/',1)[0] + '/'
+        
+        for option in options:
+            if option > 0:
+                image = Image(option)
+                image.url = base_url + str(option) + '.html'
+                result.append(image)
+        
+        return result
+    
+    @memoized
+    def load_image_url(self, image):
+        response = load_url(image.url)
+        image.image_url = self._parse_image_url(response)
+    
+    def _parse_image_url(self, data):
+        doc = BeautifulSoup(data, 'html.parser')
+        
+        #head = doc.head
+        #meta = head.find('meta', property='og:image')
+        #return meta['content']
+        
+        outer_div = doc.find('div', id='viewer')
+        inner_div = outer_div.find('div', class_='read_img')
+        img = inner_div.find('img', id='image')
+        return img['src']
+    
+    
+    ############# following are the old methods of this class ##################
+    
+    
     def getImage(self, image):
         """
         Gets the URL for an image by parsing the site. Does not download
@@ -93,8 +186,16 @@ class MangaFoxPlugin(PluginBase.PluginBase):
             for a in ul.findAll('a', class_='tips'):
                 link = a['href']
                 text = a.get_text()
-                number = text.rsplit(None, 1)[-1]
-                title = a.find_next_sibling('span', class_='title').get_text()
+                try:
+                    number = int(text.rsplit(None, 1)[-1])
+                except ValueError:
+                    logger.error('Could not parse chapter number!')
+                    number = 0
+                title_tag = a.find_next_sibling('span', class_='title')
+                if title_tag:
+                    title = title_tag.get_text()
+                else:
+                    title = ''
                 # create Chapter object
                 chapter = Chapter(manga.name, number)
                 chapter.chapterURL = link
@@ -157,7 +258,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
                 m.mangaURL = link
                 m.is_open = is_open
                 list_of_all_mangas.append(m)        
-        print('Found {} mangas on site!'.format(parser.targetCount))
+        print('Found {} mangas on site!'.format(len(list_of_all_mangas)))
         return list_of_all_mangas
 
 
@@ -178,4 +279,34 @@ class MangaFoxPlugin(PluginBase.PluginBase):
 #  <module>
 # -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-    print('no test implemented')
+    plugin = MangaFoxPlugin()
+    
+    print('testing MangaFoxPlugin._parse_manga_list()')
+    response = open('../../testdata/MangaFox/manga_list.htm', encoding='UTF-8')
+    manga_list = plugin._parse_manga_list(response)
+    assert(len(manga_list) == 16340)
+    print('test successful')
+    
+    print('######################################################################')
+    
+    print('testing MangaFoxPlugin._parse_chapter_list()')
+    response = open('../../testdata/MangaFox/chapter_list.htm', encoding='UTF-8')
+    chapter_list = plugin._parse_chapter_list('', response)
+    assert(len(chapter_list) == 821)
+    print('test successful')
+    
+    print('######################################################################')
+    
+    print('testing MangaFoxPlugin._parse_image_list()')
+    response = open('../../testdata/MangaFox/image.htm', encoding='UTF-8')
+    image_list = plugin._parse_image_list(response)
+    assert(len(image_list) == 17)
+    print('test successful')
+    
+    print('######################################################################')
+    
+    print('testing MangaFoxPlugin._parse_image_url()')
+    response = open('../../testdata/MangaFox/image.htm', encoding='UTF-8')
+    url = plugin._parse_image_url(response)
+    assert(url == 'image-Dateien/t001.jpg')
+    print('test successful')

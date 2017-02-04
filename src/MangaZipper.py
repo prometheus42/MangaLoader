@@ -23,15 +23,15 @@ def createZip(mangaDir, destDir):
     name = os.path.basename(os.path.normpath(mangaDir))
     zipFileName = name + '.cbz'
     logger.debug('create cbz file "{}"...'.format(zipFileName))
-    cbzFile = zipfile.ZipFile(destDir + '/' + zipFileName, 'w')
-
-    for f in os.listdir(mangaDir):
-        # TODO check file extension
-        #  fileName, fileExtension = os.path.splitext(f)
-        logger.debug('add file "{}" to cbz file "{}".'.format(f, zipFileName))
-        file_in_filesystem = os.path.join(mangaDir, f)
-        file_in_zipfile = os.path.join(name, os.path.basename(f))
-        cbzFile.write(file_in_filesystem, file_in_zipfile, zipfile.ZIP_DEFLATED)
+    with zipfile.ZipFile(os.path.join(dest_dir, zip_file_name), 'w') as cbzFile:
+        for f in os.listdir(mangaDir):
+            # TODO check file extension
+            #  fileName, fileExtension = os.path.splitext(f)
+            logger.debug('add file "{}" to cbz file "{}".'.format(f, zipFileName))
+            file_in_filesystem = os.path.join(mangaDir, f)
+            # TODO: Check whether it is necessary to encode file_in_zipfile as ASCII (xxx.encode('ascii'))
+            file_in_zipfile = os.path.join(name, os.path.basename(f))
+            cbzFile.write(file_in_filesystem, file_in_zipfile, zipfile.ZIP_DEFLATED)
 
     return True
 
