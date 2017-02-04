@@ -11,12 +11,12 @@ Created on Mon Dec 29 13:44:49 2014
 import logging
 import os
 import pickle
+
 from PyQt4 import QtGui
 from PyQt4 import QtCore
 
+from gui import viewer
 from src.plugins import MangaFoxPlugin
-from src.plugins import OneMangaPlugin
-from src.plugins import KissMangaPlugin
 from src import MangaBase
 
 
@@ -132,6 +132,8 @@ class LoaderWindow(QtGui.QWidget):
         directory = QtGui.QFileDialog.getExistingDirectory(self, 'Select directory to save mangas...')
         self.manga_store_path = directory
         self.directory_button.setText(self.manga_store_path)
+        if loader:
+            self.loader.destDir = self.manga_store_path
         logger.debug('Choosen directory: "{}".'.format(directory))
 
     @QtCore.pyqtSlot()
@@ -139,15 +141,19 @@ class LoaderWindow(QtGui.QWidget):
         # check whether the input fields are valid
         startChapter = self.chapter_begin.value()
         endChapter = self.chapter_end.value()
+        chosen_manga_name = self.mangaComboBox.currentText()
         if endChapter < startChapter:
-            QtGui.QMessageBox.information(self, 'Error', 'Last chapter is smaller than first chapter!')
+            QtGui.QMessageBox.warning(self, 'Error', 'Last chapter is smaller than first chapter!')
+            return
+        if not chosen_manga_name:
+            QtGui.QMessageBox.warning(self, 'Error!', 'No manga was chosen.')
             return
         logger.info('Loading loader...')
         loader = MangaBase.Loader(self.plugin, self.manga_store_path)
         # setup progress bar for loading of chapters
         self.loader_progress.setRange(startChapter - 1, endChapter)
         self.loader_progress.setValue(startChapter - 1)
-        # enforce event processing
+        # enforce event processing to update progress bar
         QtGui.QApplication.processEvents()
         logger.info('Loading chapters {} - {}'.format(str(startChapter), str(endChapter)))        
         for i in range(startChapter, endChapter + 1):
@@ -170,14 +176,8 @@ class LoaderWindow(QtGui.QWidget):
 
     @QtCore.pyqtSlot()
     def on_update_chapter_fields(self):
-        chosen_manga = self.mangaComboBox.currentText()
+        chosen_manga = self.mangaComboBox.itemData(self.mangaComboBox.currentIndex())
         logger.debug('Combo box changed to {}.'.format(chosen_manga))
-        # look for chosen manga and get chapter list
-        # TODO Use this currentManga = self.mangaComboBox.itemData(self.mangaComboBox.currentIndex())
-        for manga in self.manga_list:
-            if manga.name == chosen_manga:
-                chosen_manga = manga
-                break
         self.currentChapterList = self.plugin.getListOfChapters(chosen_manga)
         # set max and min for input fields
         chapter_number_list = [x.chapterNo for x in self.currentChapterList]
@@ -192,6 +192,18 @@ class LoaderWindow(QtGui.QWidget):
 
     @QtCore.pyqtSlot()
     def on_show_manga(self):
-        logger.error('Show current manga chapter')
-        #main.setWindowState(QtCore.Qt.WindowMaximized)
-        #v = viewer.ImageView(main)
+        logger.info('Show current manga chapter in viewer...')
+        viewer_window = QtGui.QMainWindow()
+        viewer_window.setWindowState(QtCore.Qt.WindowMaximized)
+        viewer_window.setWindowTitle('MangaLoader Viewer')
+        chosen_manga = self.mangaComboBox.itemData(self.mangaComboBox.currentIndex())
+        self.currentChapterList = self.plugin.getListOfChapters(chosen_manga)
+        for c in self.currentChapterList:
+            if c.chapterNo == self.chapter_begin.value():
+                chosen_chapter = c
+                break
+        image_view = viewer.ImageView(viewer_window, self.manga_store_path,
+                                      start_with_manga=chosen_manga, start_with_chapter=chosen_chapter)
+        viewer_window.setCentralWidget(image_view)
+        viewer_window.show()
+
