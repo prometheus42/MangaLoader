@@ -5,17 +5,15 @@ import sys
 import time
 import logging
 import logging.handlers
+from os.path import expanduser
 from optparse import OptionParser
 
 from src import MangaBase
-from src.plugins import MangaReaderPlugin
 from src.plugins import MangaFoxPlugin
-from src.plugins import MangaHerePlugin
-from src.plugins import EatMangaPlugin
 
 
 APP_NAME = 'MangaLoader'
-APP_VERSION = 'v0.1'
+APP_VERSION = 'v0.2'
 
 
 # -------------------------------------------------------------------------------------------------
@@ -26,20 +24,25 @@ def create_logger():
     """Creates logger for this application."""
     LOG_FORMAT = '%(asctime)-23s [%(levelname)8s] %(name)-15s %(message)s (%(filename)s:%(lineno)s)'
     LOG_LEVEL = logging.DEBUG
-    LOG_FILENAME = os.path.join(os.getenv('HOME'), '.MangaLoader', 'mangaloader.log')
+    LOG_FILENAME = os.path.join(expanduser("~"), '.MangaLoader', 'mangaloader.log')
+
     logger = logging.getLogger('MangaLoader')
     logger.setLevel(LOG_LEVEL)
+
     # add logging to screen
     log_to_screen = logging.StreamHandler(sys.stdout)
-    log_to_screen.setLevel(logging.WARNING)
+    log_to_screen.setLevel(LOG_LEVEL)
     logger.addHandler(log_to_screen)
+
     # add logging to file
+    os.makedirs(os.path.dirname(LOG_FILENAME), exist_ok=True)
     log_to_file = logging.handlers.RotatingFileHandler(LOG_FILENAME,
                                                        maxBytes=262144,
                                                        backupCount=5)
     log_to_file.setLevel(LOG_LEVEL)
     log_to_file.setFormatter(logging.Formatter(LOG_FORMAT))
     logger.addHandler(log_to_file)
+
     return logger
 
 
@@ -67,25 +70,13 @@ def parse_and_load():
                     action='store_true',
                     dest='version',
                     help='show version information')
-    parser.add_option('--MangaReader',
-                    action='store_true',
-                    dest='MangaReader',
-                    help='use MangaReader plugin')
-    parser.add_option('--MangaFox',
-                    action='store_true',
-                    dest='MangaFox',
-                    help='use MangaFox plugin')
-    parser.add_option('--MangaHere',
-                    action='store_true',
-                    dest='MangaHere',
-                    help='use MangaHere plugin')
-    parser.add_option('--EatManga',
-                    action='store_true',
-                    dest='EatManga',
-                    help='use EatManga plugin')
+    parser.add_option('-m',
+                    action='store',
+                    dest='module',
+                    help='specify the used module (currently supported: MangaFox)')
     parser.add_option('-z',
                     action='store_true',
-                    dest='Zip',
+                    dest='zip',
                     help='create cbz files')
     parser.add_option('-n',
                     action='store',
@@ -93,20 +84,12 @@ def parse_and_load():
                     dest='name',
                     metavar='NAME',
                     help='name of the manga')
-    parser.add_option('-r',
+    parser.add_option('-c',
                     action='store',
-                    type='int',
-                    dest='range',
-                    nargs=2,
-                    metavar='FROM TO',
-                    help='load a range of chapters')
-    parser.add_option('-i',
-                    action='store',
-                    type='int',
-                    dest='image',
-                    nargs=2,
-                    metavar='CHAPTER IMAGE',
-                    help='load a single image (chapterNo, imageNo)')
+                    type='string',
+                    dest='chapter',
+                    metavar='CHAPTER(S)',
+                    help='single or range of chapters (e.g. 1, 42-80)')
     parser.add_option('-o',
                     action='store',
                     type='string',
@@ -120,33 +103,39 @@ def parse_and_load():
         print('{} {}'.format(APP_NAME, APP_VERSION))
         sys.exit()
 
+    if options.module is None:
+        logger.error('Missing module.')
+        parser.print_usage()
+        sys.exit()
+
     if options.name is None:
         logger.error('Missing manga name.')
+        parser.print_usage()
         sys.exit()
 
     if options.output is None:
         logger.error('Missing destination folder.')
+        parser.print_usage()
         sys.exit()
 
-    if (options.range is None) and (options.image is None):
-        logger.error('Specify at least range of images.')
-        sys.exit()
+    chapter = None
+    if options.chapter != None:
+        if options.chapter.isdigit():
+            chapter = [int(options.chapter)]
+        else:
+            try:
+                parts = options.chapter.split('-')
+                chapter = range(int(parts[0]), int(parts[1]) + 1)
+            except ValueError:
+                logger.error('Invalid chapter range.')
+                parser.print_usage()
+                sys.exit()
 
-    pluginCount = 0
-    if (options.MangaReader is not None):
-        pluginCount = pluginCount + 1
-    if (options.MangaFox is not None):
-        pluginCount = pluginCount + 1
-    if (options.MangaHere is not None):
-        pluginCount = pluginCount + 1
-    if (options.EatManga is not None):
-        pluginCount = pluginCount + 1
-
-    if  pluginCount <= 0:
-        logger.warn('No plugin specified, using MangaFox.')
-        options.MangaFox = True
-    if  pluginCount > 1:
-        logger.error('Specify exactly one plugin.')
+    if options.module.lower() == 'mangafox':
+        pass
+    else:
+        logger.error('Unknown module.')
+        parser.print_usage()
         sys.exit()
 
     logger.debug('options parse done')
@@ -157,56 +146,37 @@ def parse_and_load():
     #####
 
     start_time = time.time()
-    logger.debug('start time: %.2f s' %(start_time))
+    logger.debug('start time: %.2f s' % (start_time))
 
     mangaName = options.name
     destDir = options.output
 
-    if options.range is not None:
-        useRange = True
-        startChapter = options.range[0]
-        endChapter = options.range[1]
-    else:
-        useRange = False
-        chapter = options.image[0]
-        image = options.image[1]
-
-    doZip = options.Zip != None
+    doZip = options.zip != None
 
     logger.info('loading plugin')
-    if options.MangaReader is not None:
-        plugin = MangaReaderPlugin.MangaReaderPlugin()
-        logger.debug('using MangaLoader plugin')
-    elif options.MangaFox is not None:
+    if options.module.lower() == 'mangafox':
         plugin = MangaFoxPlugin.MangaFoxPlugin()
         logger.debug('using MangaFox plugin')
-    elif options.MangaHere is not None:
-        plugin = MangaHerePlugin.MangaHerePlugin()
-        logger.debug('using MangaHere plugin')
-    elif options.EatManga is not None:
-        plugin = EatMangaPlugin.EatMangaPlugin()
-        logger.debug('using EatManga plugin')
 
     logger.info('loading Loader')
     loader = MangaBase.Loader(plugin, destDir)
 
-    if useRange:
-        logger.info('loading chapters ' + str(startChapter) + ' - ' + str(endChapter))
-        for i in range(startChapter, endChapter+1):
-            loader.handleChapter(mangaName, i)
-            if doZip:
-                loader.zipChapter(mangaName, i)
-
-    else:
-        logger.info('loading image ' + str(chapter) + ' / ' + str(image))
-        loader.handleImage(mangaName, chapter, image)
+    logger.info('loading chapters ' + str(chapter))
+    ########
+    #loader.handle(loader.get_manga_for_name(mangaName), chapter)
+    #if doZip:
+    #    loader.zip(loader.get_manga_for_name(mangaName), chapter)
+    ########
+    for c in chapter:
+        loader.handleChapter(mangaName, c)
         if doZip:
-                loader.zipChapter(mangaName, chapter)
+            loader.zipChapter(mangaName, c)
+    ########
 
     end_time = time.time()
-    logger.debug('end time: %.2f s' %(end_time))
-    logger.info('elapsed time: %.2f s' %(end_time - start_time))
-    print(('Elapsed Time: %.2f s' %(end_time - start_time)))
+    logger.debug('end time: %.2f s' % (end_time))
+    logger.info('elapsed time: %.2f s' % (end_time - start_time))
+    print(('Elapsed Time: %.2f s' % (end_time - start_time)))
 
     logger.info('MangaLoader done')
 

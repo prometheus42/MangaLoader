@@ -1,7 +1,7 @@
 TODO
 ----
 
-- FEATURE: add plugin for MangaFox
+- fix encoding for zipper
 - BUG: uses wrong Manga image destination names for MangaHere downloads
 - BUG: zipper error, if dir does not exist (e.g. if manga is at the end)
 - Remove encodings declaration (not necessary on Python 3)

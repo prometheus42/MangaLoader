@@ -48,11 +48,11 @@ def startGUI():
     main = QtGui.QMainWindow()
     main.setWindowTitle('MangaLoader')
     # create main window and show it
-    v = loader.LoaderWindow(main)
-    main.setCentralWidget(v)
+    loader_window = loader.LoaderWindow(main)
+    main.setCentralWidget(loader_window)
     main.show()
     sys.exit(app.exec_())
-    logger.info('MangaLoader done.')
+    logger.info('MangaLoaderGUI done.')
 
 
 if __name__ == '__main__':
