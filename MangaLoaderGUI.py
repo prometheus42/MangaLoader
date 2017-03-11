@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 import logging.handlers
+from os.path import expanduser
 
 from PyQt4 import QtGui
 
@@ -20,19 +21,24 @@ APP_VERSION = 'v0.2'
 
 def create_logger():
     """Creates logger for this application."""
-    LOG_FORMAT = '%(asctime)-23s [%(levelname)8s] %(name)-15s %(message)s (%(filename)s:%(lineno)s)'
-    LOG_LEVEL = logging.DEBUG
-    LOG_FILENAME = os.path.join(os.getenv('HOME'), '.MangaLoader', 'mangaloader.log')
+    log_format = '%(asctime)-23s [%(levelname)8s] %(name)-15s %(message)s (%(filename)s:%(lineno)s)'
+    log_level = logging.DEBUG
+    log_filename = os.path.join(expanduser("~"), '.MangaLoader', 'mangaloader.log')
+
+    global logger
     logger = logging.getLogger('MangaLoader')
-    logger.setLevel(LOG_LEVEL)
+    logger.setLevel(log_level)
+
     # add logging to screen
     log_to_screen = logging.StreamHandler(sys.stdout)
     log_to_screen.setLevel(logging.WARNING)
     logger.addHandler(log_to_screen)
+
     # add logging to file
-    log_to_file = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
-    log_to_file.setLevel(LOG_LEVEL)
-    log_to_file.setFormatter(logging.Formatter(LOG_FORMAT))
+    os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+    log_to_file = logging.handlers.RotatingFileHandler(log_filename, maxBytes=262144, backupCount=5)
+    log_to_file.setLevel(log_level)
+    log_to_file.setFormatter(logging.Formatter(log_format))
     logger.addHandler(log_to_file)
     return logger
 

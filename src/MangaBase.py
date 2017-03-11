@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
-import MangaZipper
+from src import MangaZipper
 
 
 # -------------------------------------------------------------------------------------------------
@@ -122,7 +122,6 @@ class ImageStoreManager(object):
         return os.path.join(self.base_dir, manga.name)
 
     def get_chapter_dir(self, chapter):
-        print(self.get_manga_dir(chapter.manga), chapter.manga, chapter.chapterNo)
         return os.path.join(self.get_manga_dir(chapter.manga), '{name} {no:03d}'.format(name=chapter.manga, no=chapter.chapterNo))
 
     def get_image_path(self, image, include_extension=False):
@@ -210,7 +209,6 @@ class Loader(object):
                 pickle.dump(self.manga_list, f) #, pickle.HIGHEST_PROTOCOL
             except RecursionError as e:
                 error = True
-                print(e)
         if error:
             os.remove(self.manga_list_filename)
 
@@ -276,11 +274,11 @@ class Loader(object):
         self.parse_chapter_for_manga(manga, chapter_list)
         for chapter_no in chapter_list:
             chapter = manga.get_chapter(chapter_no)
-            if chapter == None:
+            if chapter is None:
                 # FIXME: Do we want the program to exit if a wrong chapter no is given?
                 raise RuntimeError('Unable to retrieve chapter ' + str(chapter_no) + ' for manga ' + str(manga))
             for image in chapter.imagelist:
-                if image == None:
+                if image is None:
                     raise RuntimeError('Unable to retrieve image for chapter ' + str(chapter))
                 self.load_image(image)
 
@@ -314,7 +312,6 @@ class Loader(object):
         if not self.store_file_on_disk(image.image_url, self.image_store_manager.get_image_path(image)):
             return False
         logger.info('load: "' + str(image) + '"')
-        print('load: "' + str(image) + '"')
         return True
 
     def store_file_on_disk(self, source, dest):
@@ -390,7 +387,6 @@ class Loader(object):
         chapter = Chapter(manga, chapterNo)
         if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
-            print('cbz: "' + str(chapter) + '"')
             return True
         return False
 
@@ -398,7 +394,6 @@ class Loader(object):
         logger.debug('zipChapter({}, {})'.format(manga.name, chapter.chapterNo))
         if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
-            print('cbz: "' + str(chapter) + '"')
             return True
         return False
 
@@ -430,7 +425,6 @@ class Loader(object):
             return False
 
         logger.info('parse: "' + str(image) + '"')
-        print('parse: "' + str(image) + '"')
         return True
 
     def loadManga(self, manga):
@@ -457,7 +451,6 @@ class Loader(object):
         if not self.store_file_on_disk(image.url, self.image_store_manager.get_image_path(image)):
             return False
         logger.info('load: "{}"'.format(image))
-        print('load: "{}"'.format(image))
         return True
 
 

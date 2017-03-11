@@ -70,7 +70,7 @@ class MangaParkPlugin(PluginBase.PluginBase):
                     begin_no = a.string.find('ch.') + 3
                     no = int(a.string[begin_no:])
                 except:
-                    print('Error while converting chapter number: {}'.format(a.string))
+                    logger.error('Error while converting chapter number: {}'.format(a.string))
                     no = 0
                 chapter = Chapter(manga, no)
                 chapter.url = urllib.parse.urljoin(BASE_URL, a['href'])
