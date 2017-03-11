@@ -27,13 +27,14 @@ MANGA_LIST_FILE = 'manga_list.data'
 
 
 class LoaderWindow(QtGui.QWidget):
-    """Shows a GUI to download mangas."""
+    """Shows a GUI to download manga."""
     def __init__(self, parent):
         super(LoaderWindow, self).__init__(parent)
         self.main_gui = parent
         self.manga_store_path = os.getcwd()
-        self.loader = Loader(MangaParkPlugin.MangaParkPlugin(), self.manga_store_path)
+        self.loader = Loader(MangaFoxPlugin.MangaFoxPlugin(), self.manga_store_path)
         self.manga_list = []
+        self.current_chapter_list = []
         self.create_fonts()
         self.setup_ui()
         self.set_signals_and_slots()
@@ -94,7 +95,7 @@ class LoaderWindow(QtGui.QWidget):
         completer.setCompletionMode(QtGui.QCompleter.UnfilteredPopupCompletion)  # PopupCompletion
         self.mangaComboBox.setCompleter(completer)
         # get list of mangas from Loader and populate combo box
-        self.manga_list = self.loader.get_all_mangas(update=False)
+        self.manga_list = self.loader.get_all_manga(update=False)
         for manga in self.manga_list:
             self.mangaComboBox.addItem(manga.name, userData=manga)
         return self.mangaComboBox
@@ -111,7 +112,7 @@ class LoaderWindow(QtGui.QWidget):
     @QtCore.pyqtSlot()
     def on_update_manga_list(self):
         # TODO Load mangas in background and update combo box regularly?!
-        self.manga_list = self.loader.get_all_mangas(update=True)
+        self.manga_list = self.loader.get_all_manga(update=True)
         # load combo box with items from manga list
         for manga in self.manga_list:
             self.mangaComboBox.addItem(manga.name, userData=manga)
@@ -146,18 +147,18 @@ class LoaderWindow(QtGui.QWidget):
         for i in range(start_chapter, end_chapter + 1):
             # find chapter object
             current_chapter = None
-            for c in self.currentChapterList:
+            for c in self.current_chapter_list:
                 if c.chapterNo == i:
                     current_chapter = c
                     break
             if current_chapter:
-                self.loader.handleChapter2(current_chapter)
+                self.loader.handle_chapter(current_chapter)
                 # set new value for progress bar and enforce event processing
                 self.loader_progress.setValue(i)
                 QtGui.QApplication.processEvents()
                 if self.do_zip_checkbox.checkState():
-                    self.loader.zipChapter2(self.mangaComboBox.itemData(self.mangaComboBox.currentIndex()),
-                                       current_chapter)
+                    self.loader.zip_chapter(self.mangaComboBox.itemData(self.mangaComboBox.currentIndex()),
+                                            current_chapter)
             else:
                 logger.error('Could not find chapter object!')
 
@@ -165,9 +166,9 @@ class LoaderWindow(QtGui.QWidget):
     def on_update_chapter_fields(self):
         chosen_manga = self.mangaComboBox.itemData(self.mangaComboBox.currentIndex())
         logger.debug('Combo box changed to {}.'.format(chosen_manga))
-        self.currentChapterList = self.loader.get_all_chapters(chosen_manga)
+        self.current_chapter_list = self.loader.get_all_chapters(chosen_manga)
         # set max and min for input fields
-        chapter_number_list = [x.chapterNo for x in self.currentChapterList]
+        chapter_number_list = [x.chapterNo for x in self.current_chapter_list]
         if chapter_number_list:
             maximum = max(chapter_number_list)
             minimum = min(chapter_number_list)
@@ -184,12 +185,14 @@ class LoaderWindow(QtGui.QWidget):
         viewer_window.setWindowState(QtCore.Qt.WindowMaximized)
         viewer_window.setWindowTitle('MangaLoader Viewer')
         chosen_manga = self.mangaComboBox.itemData(self.mangaComboBox.currentIndex())
-        self.currentChapterList = self.plugin.load_chapter_list(chosen_manga)
-        for c in self.currentChapterList:
+        self.current_chapter_list = self.plugin.load_chapter_list(chosen_manga)
+        chosen_chapter = None
+        for c in self.current_chapter_list:
             if c.chapterNo == self.chapter_begin.value():
                 chosen_chapter = c
                 break
-        image_view = viewer.ImageView(viewer_window, self.manga_store_path,
-                                      start_with_manga=chosen_manga, start_with_chapter=chosen_chapter)
-        viewer_window.setCentralWidget(image_view)
-        viewer_window.show()
+        if chosen_chapter:
+            image_view = viewer.ImageView(viewer_window, self.manga_store_path,
+                                          start_with_manga=chosen_manga, start_with_chapter=chosen_chapter)
+            viewer_window.setCentralWidget(image_view)
+            viewer_window.show()

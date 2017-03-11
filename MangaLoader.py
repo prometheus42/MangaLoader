@@ -32,7 +32,7 @@ def create_logger():
 
     # add logging to screen
     log_to_screen = logging.StreamHandler(sys.stdout)
-    log_to_screen.setLevel(logging.WARNING)
+    log_to_screen.setLevel(logging.INFO)
     logger.addHandler(log_to_screen)
 
     # add logging to file
@@ -174,9 +174,9 @@ def parse_and_load():
                 current_chapter = c
                 break
         if current_chapter:
-            loader.handleChapter2(current_chapter)
+            loader.handle_chapter(current_chapter)
             if do_zip:
-                loader.zipChapter2(manga, current_chapter)
+                loader.zip_chapter(manga, current_chapter)
         else:
             logger.error('Could not find object for chapter {}.'.format(no))
 

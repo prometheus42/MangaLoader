@@ -213,14 +213,13 @@ def load_url(url, max_try_count=5, evaluate_js=False):
         session = dryscrape.Session()
         session.visit(url)
         result = session.body()
-        print(result)
         return result
     else:
         headers = {'User-Agent': agent_string}
         try:
             logger.debug('requesting: {}'.format(url))
             request = requests.get(url)
-            if request.status_code == 200:
+            if request.status_code == requests.codes.ok:
                 result = request.text
                 logger.debug('URL successfully loaded.')
             else:

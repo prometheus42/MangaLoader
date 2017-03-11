@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from src.data import Manga, Chapter, Image
+from src.data import Image
 from src import MangaZipper
 
 
@@ -32,7 +32,8 @@ class ImageStoreManager(object):
         return os.path.join(self.base_dir, manga.name)
 
     def get_chapter_dir(self, chapter):
-        return os.path.join(self.get_manga_dir(chapter.manga), '{name} {no:03d}'.format(name=chapter.manga, no=chapter.chapterNo))
+        chapter_dir_name = '{name} {no:03d}'.format(name=chapter.manga, no=chapter.chapterNo)
+        return os.path.join(self.get_manga_dir(chapter.manga), chapter_dir_name)
 
     def get_image_path(self, image, include_extension=False):
         """
@@ -42,13 +43,13 @@ class ImageStoreManager(object):
         of the HTTP response.
         """
         if include_extension:
-            image_extension = '.' + os.path.splitext(image.imageUrl)
+            image_extension = '.{}'.format(os.path.splitext(image.imageUrl))
         else:
             image_extension = ''
         return os.path.join(self.get_chapter_dir(image.chapter),
-                            '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo,Ext=image_extension))
+                            '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo, Ext=image_extension))
 
-    def find_next_image(self, start_with_manga, start_with_chapter):
+    def find_next_image(self, start_with_chapter):
         """
         Finds path of the next image that should be shown. After a given
         chapter of a series is finished, the next image is automatically from
@@ -65,11 +66,41 @@ class ImageStoreManager(object):
             # TODO: Handle this better!!!
             start_with_chapter.chapterNo += 1
 
-    def do_image_already_exists(self, image):
+    def does_image_already_exists(self, image):
         """
         Checks whether a given image is already present in the image store.
         """
         return os.path.exists(self.get_image_path(image, include_extension=True))
+
+    def store_file_on_disk(self, stream, image):
+        # build file name for new image
+        base_name = self.get_image_path(image)
+        extension = self.guess_file_extension(stream.headers['content-type'], image.url)
+        image_file_name = '{}{}'.format(base_name, extension)
+        # create necessary directories first
+        try:
+            os.makedirs(base_name[0:base_name.rfind('/')])
+        except OSError:
+            logger.debug('Directories in image store already exist.')
+        # open file and write chunks of default size (128 byte)
+        with open(image_file_name, 'wb') as f:
+            for chunk in stream:
+                f.write(chunk)
+        return image_file_name
+
+    @staticmethod
+    def guess_file_extension(content_type, source):
+        # get file extension for content type
+        extension = mimetypes.guess_extension(content_type)
+        # alternatively use urllib to parse url to get extension
+        parsed = urlparse(source)
+        root, ext = os.path.splitext(parsed.path)
+        if extension != ext:
+            logger.warning('File extension unclear: {} <-> {}'.format(extension, ext))
+        if extension is None:
+            extension = '.jpeg'
+            logger.warning('Could not guess file extension, using jpeg.')
+        return extension
 
 
 # -------------------------------------------------------------------------------------------------
@@ -83,7 +114,8 @@ class Loader(object):
         self.pickle_data = pickle_data
         self.image_store_manager = ImageStoreManager(store_directory)
         self.manga_list = None
-        self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX, loader_plugin.__class__.__name__, MANGA_LIST_FILE_SUFFIX)
+        self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX, loader_plugin.__class__.__name__,
+                                                    MANGA_LIST_FILE_SUFFIX)
         if pickle_data:
             self._load_manga_list()
 
@@ -116,13 +148,13 @@ class Loader(object):
         with open(self.manga_list_filename, 'wb') as f:
             # pickle the manga list using the highest protocol available
             try:
-                pickle.dump(self.manga_list, f) #, pickle.HIGHEST_PROTOCOL
+                pickle.dump(self.manga_list, f)  # , pickle.HIGHEST_PROTOCOL
             except RecursionError as e:
                 error = True
         if error:
             os.remove(self.manga_list_filename)
 
-    def get_all_mangas(self, update=False):
+    def get_all_manga(self, update=False):
         if update:
             self.manga_list = self.loader_plugin.load_manga_list()
             # FIXME: Problem with circular dependencies between Manga and Chapter!
@@ -132,7 +164,7 @@ class Loader(object):
             if not self.manga_list:
                 self.manga_list = self._load_manga_list()
                 if not self.manga_list:
-                    self.manga_list = self.get_all_mangas(update=True)
+                    self.manga_list = self.get_all_manga(update=True)
         return self.manga_list
 
     def get_manga_by_name(self, manga_name):
@@ -142,7 +174,7 @@ class Loader(object):
         returned.
         """
         logger.debug('Getting Manga object for given name: {}'.format(manga_name))
-        self.get_all_mangas()
+        self.get_all_manga()
         for manga in self.manga_list:
             if manga.name == manga_name:
                 return manga
@@ -151,7 +183,7 @@ class Loader(object):
     def get_all_chapters(self, chosen_manga):
         return self.loader_plugin.load_chapter_list(chosen_manga)
 
-    def parse_chapter_for_manga(self, manga=None, chapter_no=None, image_no=None, load_images=True, update=False):
+    def parse_chapter_for_manga(self, manga=None, chapter_no=None, image_no=None, load_images=True):
         """
         Parses pages for given manga and extracts links to all images for all
         chapters that are given as parameters. The parameter load_images decides
@@ -159,9 +191,8 @@ class Loader(object):
         """
         manga_name = '' if manga is None else manga.name
         # FIXME: Handle None for manga parameter.
-        logger.debug('parse_manga({}, {}, {})'.format(str(manga_name), str(chapter_no), str(image_no)))
-        logger.debug('parsing manga ' + str(manga))
-        self.plugin.load_chapter_list(manga)
+        logger.debug('Parsing_manga({}, {}, {})'.format(str(manga_name), str(chapter_no), str(image_no)))
+        self.loader_plugin.load_chapter_list(manga)
         if load_images:
             self._parse_images_for_chapter(manga, chapter_no, image_no)
         return manga
@@ -170,11 +201,11 @@ class Loader(object):
         for chapter in manga.chapterlist:
             if chapter_no is None or chapter.number == chapter_no or chapter.number in chapter_no:
                 logger.debug('parsing image list for ' + str(chapter))
-                self.plugin.load_images_for_chapter(chapter)
+                self.loader_plugin.load_images_for_chapter(chapter)
                 for image in chapter.imagelist:
                     if image_no is None or image.number == image_no or image.number in image_no:
                         logger.debug('parsing image url ' + str(image))
-                        self.plugin.load_image_url(image)
+                        self.loader_plugin.load_image_url(image)
 
     def handle(self, manga, chapter_list):
         if manga is None:
@@ -209,159 +240,76 @@ class Loader(object):
             MangaZipper.create_zip(chapter_dir, manga_dir)
             logger.info('cbz: "' + str(chapter) + '"')
 
-    def load_chapter(self, chapter):
-        list_of_futures = list()
-        with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKER) as executor:
-            for image in chapter.imagelist:
-                f = executor.submit(self.load_image, image)
-                list_of_futures.append(f)
-        return all(list_of_futures)
-
-    def load_image(self, image):
-        # calculate destination path and call store_file_on_disk()
-        if not self.store_file_on_disk(image.image_url, self.image_store_manager.get_image_path(image)):
-            return False
-        logger.info('load: "' + str(image) + '"')
-        return True
-
-    def store_file_on_disk(self, source, dest):
-        # create directories first
-        try:
-            os.makedirs(dest[0 : dest.rfind('/')])
-        except OSError:
-            pass
-        # open source url and copy to destination file; retry 5 times
-        # TODO: Check how to implement retry counter with requests library.
-        tries = 1
-        while True:
-            import urllib
-            try:
-                r = requests.get(source, stream=True)
-                # get file extension for content type
-                content_type = r.headers['content-type']
-                extension = mimetypes.guess_extension(content_type)
-                # alternatively use urllib to parse url to get extension
-                parsed = urlparse(source)
-                root, ext = os.path.splitext(parsed.path)
-                if extension != ext:
-                    logger.warning('File extension unclear: {} <-> {}'.format(extension, ext))
-                if extension is None:
-                    extension = '.jpeg'
-                    logger.warning('Could not guess file extension, using jpeg.')
-                # save data to file if status code 200 was returned
-                if r.status_code == 200:
-                    with open('{}{}'.format(dest,extension), 'wb') as f:
-                        # write chunks of default size (128 byte)
-                        for chunk in r:
-                            f.write(chunk)
-                self.loader_plugin.postprocess_image(dest)
-                return True
-            except urllib.error.URLError:
-                logger.warning('failed to load "' + str(source) + '" (' + str(tries) + ')')
-                if tries >= 5:
-                    logger.error('failed to load "' + str(source) + '"')
-                    return False
-            tries += 1
-
-    ############# following are the old methods of this class ##################
-
-    def handleChapter2(self, chapter):
+    def handle_chapter(self, chapter):
         logger.debug('handleChapter({})'.format(chapter))
-        if not self.parseChapter(chapter):
+        if not self._parse_chapter(chapter):
             return False
-        if not self.loadChapter(chapter):
-            return False
-        return True
-
-    def handleChapter(self, name, chapterNo):
-        logger.debug('handleChapter({}, {})'.format(name, chapterNo))
-        chapter = Chapter(Manga(name), chapterNo)
-        if not self.parseChapter(chapter):
-            return False
-        if not self.loadChapter(chapter):
+        if not self.load_chapter(chapter):
             return False
         return True
 
-    def handleImage(self, name, chapterNo, imageNo):
-        logger.debug('handleChapter({}, {}, {})'.format(name, chapterNo, imageNo))
-        image = Image(Chapter(Manga(name), chapterNo), imageNo)
-        if not self.parseImage(image):
-            return False
-        if not self.loadImage(image):
-            return False
-        return True
-
-    def zipChapter(self, name, chapterNo):
-        logger.debug('zipChapter({}, {})'.format(name, chapterNo))
-        manga = Manga(name)
-        chapter = Chapter(manga, chapterNo)
-        if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
-            logger.info('cbz: "' + str(chapter) + '"')
-            return True
-        return False
-
-    def zipChapter2(self, manga, chapter):
+    def zip_chapter(self, manga, chapter):
         logger.debug('zipChapter({}, {})'.format(manga.name, chapter.chapterNo))
-        if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
+        if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter),
+                                  self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             return True
         return False
 
-    def parseManga(self, manga):
+    def _parse_chapter(self, chapter):
         return_value = False
-        # FIXME Do NOT use maximum number of chapters because "One Piece" :-)
         for i in range(1, 1000):
-            chapter = Chapter(manga, i)
-            if not self.parseChapter(chapter):
-                break
-            manga.addChapter(chapter)
-            return_value = True
-        return return_value
-
-    def parseChapter(self, chapter):
-        return_value = False
-        for i in range(1,1000):
             image = Image(chapter, i)
-            if not self.parseImage(image):
+            if not self.loader_plugin.load_image_url(image):
                 break
             chapter.add_image(image)
             return_value = True
         return return_value
 
-    def parseImage(self, image):
-        if self.loader_plugin is None:
-            return False
-        if not self.loader_plugin.load_image_url(image):
-            return False
+    def load_chapter(self, chapter, use_threads=False):
+        if not use_threads:
+            for image in chapter.image_list:
+                self.load_image(image)
+            return True
+        else:
+            list_of_futures = list()
+            # context manager cleans up automatically after all threads have executed
+            with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKER) as executor:
+                for image in chapter.image_list:
+                    f = executor.submit(self.load_image, image)
+                    list_of_futures.append(f)
+            return True
 
-        logger.info('parse: "' + str(image) + '"')
-        return True
-
-    def loadManga(self, manga):
-        for chapter in manga.chapterList:
-            if not self.loadChapter(chapter):
-                return False
-        return True
-
-    def loadChapter(self, chapter):
-        for image in chapter.image_list:
-            self.loadImage(image)
-        return True
-        ######
-        list_of_futures = list()
-        # context manager cleans up automatically after all threads have executed 
-        with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKER) as executor:
-            for image in chapter.imageList:
-                f = executor.submit(self.loadImage, image)
-                list_of_futures.append(f)
-        return True
-
-    def loadImage(self, image):
+    def load_image(self, image):
         # calculate destination path and call store_file_on_disk()
-        if not self.store_file_on_disk(image.url, self.image_store_manager.get_image_path(image)):
+        if not self.store_file_on_disk(image):
             return False
         logger.info('load: "{}"'.format(image))
         return True
+
+    def store_file_on_disk(self, image, max_tries=5):
+        """
+        Requests data from given URL in Image object and calls ImageStoreManager instance to save it to destination
+        file. If the requests times out or an error occurs, the requests is send again for a maximum number of times.
+
+        :param image: Image object containing the URL to load data from
+        :param max_tries: number of times to try to request data from URL
+        :return: true, if request was successful
+        """
+        tries = 1
+        while True:
+            source = image.url
+            try:
+                r = requests.get(source, stream=True, timeout=2)
+                if r.status_code == requests.codes.ok:
+                    actual_file_path = self.image_store_manager.store_file_on_disk(r, image)
+                    self.loader_plugin.postprocess_image(actual_file_path)
+                return True
+            except requests.exceptions.RequestException:
+                logger.warning('failed to load {} (try {})'.format(source, tries))
+                if tries >= max_tries:
+                    return False
+            tries += 1
 
 
 # -------------------------------------------------------------------------------------------------

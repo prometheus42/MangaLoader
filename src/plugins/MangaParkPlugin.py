@@ -32,7 +32,8 @@ class MangaParkPlugin(PluginBase.PluginBase):
         response = load_url(MANGA_LIST_URL)
         return self._parse_manga_list(response)
     
-    def _parse_manga_list(self, data):
+    @staticmethod
+    def _parse_manga_list(data):
         doc = BeautifulSoup(data, 'html.parser')
         result = []
         for div in doc.find_all('div', class_='item'):
@@ -51,7 +52,8 @@ class MangaParkPlugin(PluginBase.PluginBase):
             manga.add_chapter(chapter)
         return chapter_list
     
-    def _parse_chapter_list(self, manga, data):
+    @staticmethod
+    def _parse_chapter_list(manga, data):
         doc = BeautifulSoup(data, 'html.parser')
         result = []
         for div in doc.find_all('div', id='list'):
@@ -64,8 +66,8 @@ class MangaParkPlugin(PluginBase.PluginBase):
                 try:
                     begin_no = a.string.find('ch.') + 3
                     no = int(a.string[begin_no:])
-                except:
-                    logger.error('Error while converting chapter number: {}'.format(a.string))
+                except ValueError:
+                    logger.warning('Error while converting chapter number: {}'.format(a.string))
                     no = 0
                 chapter = Chapter(manga, no)
                 chapter.url = urllib.parse.urljoin(BASE_URL, a['href'])
@@ -103,7 +105,8 @@ class MangaParkPlugin(PluginBase.PluginBase):
                 break
         return list_of_images
 
-    def __parse_image_page(self, page_url):
+    @staticmethod
+    def __parse_image_page(page_url):
         response = load_url(page_url)
         doc = BeautifulSoup(response, 'html.parser')
         image = doc.find('a', class_='img-link').find('img')
