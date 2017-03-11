@@ -1,19 +1,13 @@
 #!/usr/bin/python3
 
-import re
 import logging
-from PIL import Image
 
 from bs4 import BeautifulSoup
 
 import src.PluginBase as PluginBase
-from data import Manga, Chapter
-from src.MangaBase import Chapter
+from src.data import Manga, Chapter
 from src.helper import memoized
 
-# -------------------------------------------------------------------------------------------------
-#  logging
-# -------------------------------------------------------------------------------------------------
 
 logger = logging.getLogger('MangaLoader.MangaFoxPlugin')
 
@@ -175,7 +169,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
 
     def postprocess_image(self, filename):
         logger.debug('Cropping image file to delete ads.')
-        # image = Image.open(filename)
+        # image = PIL.Image.open(filename)
         # w, h = image.size
         # image.crop((0, 0, w, h-30)).save(filename)
 

@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from data import Manga, Chapter, Image
+from src.data import Manga, Chapter, Image
 from src import MangaZipper
 
 

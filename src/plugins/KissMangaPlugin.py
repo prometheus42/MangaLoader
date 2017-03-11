@@ -1,17 +1,12 @@
 #!/usr/bin/python3
 
-import re
 import logging
 
 import src.PluginBase as PluginBase
 from src.PluginBase import find_re_in_site
-from data import Manga, Chapter
-from src.MangaBase import Chapter
+from src.data import Manga, Chapter
 from src.helper import memoized
 
-# -------------------------------------------------------------------------------------------------
-#  logging
-# -------------------------------------------------------------------------------------------------
 
 logger = logging.getLogger('MangaLoader.KissMangaPlugin')
 
@@ -19,7 +14,7 @@ BASE_URL = 'http://kissmanga.com/'
 
 
 # -------------------------------------------------------------------------------------------------
-#  Plugin class
+#  KissMangaPlugin class
 # -------------------------------------------------------------------------------------------------
 class KissMangaPlugin(PluginBase.PluginBase):
     """

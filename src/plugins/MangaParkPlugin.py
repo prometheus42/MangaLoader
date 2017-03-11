@@ -6,15 +6,10 @@ import urllib.parse
 from bs4 import BeautifulSoup
 
 import src.PluginBase as PluginBase
-from data import Manga, Chapter, Image
-from src.MangaBase import Chapter
-from src.MangaBase import Image
+from src.data import Manga, Chapter, Image
 from src.helper import memoized
 from src.PluginBase import load_url
 
-# -------------------------------------------------------------------------------------------------
-#  logging
-# -------------------------------------------------------------------------------------------------
 
 logger = logging.getLogger('MangaLoader.MangaParkPlugin')
 

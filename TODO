@@ -3,7 +3,6 @@ TODO
 
 - rename all modules to simple lower-case names
 - move writing to file and reading from file into ImageStoreManager class
-- move data classes into separate module
 
 - differentiate between counting number of chapters and the actual chapter numbers, like 234.5
 

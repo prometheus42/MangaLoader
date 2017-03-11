@@ -1,12 +1,11 @@
 #!/usr/bin/python3
 
-import logging
 import re
+import logging
 from itertools import islice
 
 import src.PluginBase as PluginBase
-from data import Manga, Chapter
-from src.MangaBase import Chapter
+from src.data import Manga, Chapter
 from src.helper import memoized
 
 
