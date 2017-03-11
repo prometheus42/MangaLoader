@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 
 import logging
+import urllib
 
 from bs4 import BeautifulSoup
 
 import src.PluginBase as PluginBase
-from src.data import Manga, Chapter
+from src.data import Manga, Chapter, Image
 from src.helper import memoized
 
 
@@ -16,21 +17,20 @@ MANGA_LIST_URL = BASE_URL + 'manga/'
 
 
 # -------------------------------------------------------------------------------------------------
-#  Plugin class
+#  MangaFoxPlugin class
 # -------------------------------------------------------------------------------------------------
 class MangaFoxPlugin(PluginBase.PluginBase):
 
     def __init__(self):
-        self.__domain = BASE_URL
-        self.__list_of_found_chapter_URLs = {}
-        self.__last_found_image_URL = ''
-    
+        pass
+
     @memoized
-    def get_manga_list(self):
+    def load_manga_list(self):
         loaded_manga_list = PluginBase.load_url(MANGA_LIST_URL)
         return self._parse_manga_list(loaded_manga_list)
     
-    def _parse_manga_list(self, data):
+    @staticmethod
+    def _parse_manga_list(data):
         doc = BeautifulSoup(data, 'html.parser')
         list_of_mangas = []
         for div in doc.find_all('div', class_='manga_list'):
@@ -47,12 +47,13 @@ class MangaFoxPlugin(PluginBase.PluginBase):
     @memoized
     def load_chapter_list(self, manga):
         response = PluginBase.load_url(manga.url)
-        chapter_list = self._parse_chapter_list(response)
+        chapter_list = self._parse_chapter_list(manga, response)
         for chapter in chapter_list:
             manga.add_chapter(chapter)
         return chapter_list
     
-    def _parse_chapter_list(self, data):
+    @staticmethod
+    def _parse_chapter_list(manga, data):
         doc = BeautifulSoup(data, 'html.parser')
         list_of_chapters = []
         for div in doc.find_all('div', id='chapters'):
@@ -65,7 +66,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
                     words = a.string.split()
                     number_string = words[len(words)-1]
                     if number_string.isdigit():  # ignore 'half' chapters
-                        chapter = Chapter(int(number_string))
+                        chapter = Chapter(manga, int(number_string))
                         chapter.url = a['href']
                         chapter.text = a.get_text()
                         if span is not None:
@@ -74,110 +75,55 @@ class MangaFoxPlugin(PluginBase.PluginBase):
         return list_of_chapters
     
     @memoized
-    def load_image_list(self, chapter):
+    def load_images_for_chapter(self, chapter):
         response = PluginBase.load_url(chapter.url)
-        for image in self._parse_image_list(chapter.url, response):
+        image_list = self._parse_image_list(chapter, response)
+        for image in image_list:
             chapter.add_image(image)
+        return image_list
     
-    def _parse_image_list(self, url, data):
-        doc = BeautifulSoup(data, 'html.parser')
+    def _parse_image_list(self, chapter, data):
         result = []
-        
-        div = doc.find('div', class_='r m')
-        
         options = []
+        doc = BeautifulSoup(data, 'html.parser')
+        div = doc.find('div', class_='r m')
         select = div.find('select', class_='m')
         for option in select.find_all():
             value = option['value']
             if value is not None and value.isdigit():
-                options.append(int(value))#
-        
-        base_url = url.rsplit('/',1)[0] + '/'
-        
+                options.append(int(value))
+
+        base_url = chapter.url.rsplit('/',1)[0] + '/'
         for option in options:
             if option > 0:
-                image = Image(option)
-                image.url = base_url + str(option) + '.html'
+                image = Image(chapter, option)
+                image.url = self._parse_image_page(urllib.parse.urljoin(base_url, '{}.html'.format(option)))
                 result.append(image)
-        
         return result
     
     @memoized
     def load_image_url(self, image):
-        response = PluginBase.load_url(image.url)
-        image.image_url = self._parse_image_url(response)
-    
-    def _parse_image_url(self, data):
+        list_of_images = self.load_images_for_chapter(image.chapter)
+        for i in list_of_images:
+            if i.imageNo == image.imageNo:
+                image.url = i.url
+                return True
+        return False
+
+    @staticmethod
+    def _parse_image_page(page_url):
+        data = PluginBase.load_url(page_url)
         doc = BeautifulSoup(data, 'html.parser')
-        
-        # head = doc.head
-        # meta = head.find('meta', property='og:image')
-        # return meta['content']
-        
         outer_div = doc.find('div', id='viewer')
         inner_div = outer_div.find('div', class_='read_img')
         img = inner_div.find('img', id='image')
         return img['src']
-    
-    
-    ############# following are the old methods of this class ##################
-    
-    
-    def getImage(self, image):
-        """
-        Gets the URL for an image by parsing the site. Does not download
-        the image file itself!
-        
-        :param image: Image object containing a valid URL to the chapters
-                      first page.
-        """
-        if image.chapter.chapterURL:
-            chapterURL = image.chapter.chapterURL
-        else:
-            chapterURL = self.__find_URL_for_chapter(image.chapter)
-        url = chapterURL.replace('1.html', '{}.html'.format(image.imageNo))
-
-        if not url:
-            logger.warning('Could not find wanted image. ')
-            return False
-
-        result = PluginBase.load_url(url)
-        if result is None:
-            return False
-
-        logger.debug('Start parsing...')
-        soup = BeautifulSoup(result, 'html.parser')
-        # TODO: Check whether to use find_all() instead of find().
-        found_tag = soup.find('img', id='image')
-        if found_tag == None:
-            logger.info('No image found in MangaFox site, maybe the chapter is not available.')
-            return False
-        else:
-            url = found_tag['src']
-
-        # check if this time the same URL was found as last time, because
-        # MangaFox shows last image of chapter when the given image number is
-        # too high
-        # TODO: Fix this by determine how many chapters there are!
-        if self.__last_found_image_URL == url:
-            return False
-
-        image.imageUrl = url
-        self.__last_found_image_URL = url
-        logger.debug('URL for image found: {}'.format(url))
-        return True
 
     def postprocess_image(self, filename):
         logger.debug('Cropping image file to delete ads.')
         # image = PIL.Image.open(filename)
         # w, h = image.size
         # image.crop((0, 0, w, h-30)).save(filename)
-
-    def __get_internal_name(self, name):
-        internal_name = name
-        internal_name = str.lower(internal_name)
-        internal_name = str.replace(internal_name, ' ', '_')
-        return internal_name
 
 
 # -------------------------------------------------------------------------------------------------
