@@ -13,9 +13,9 @@ logger = logging.getLogger('MangaLoader.MangaZipper')
 # -------------------------------------------------------------------------------------------------
 #  zipper functions
 # -------------------------------------------------------------------------------------------------
-def createZip(mangaDir, dest_dir):
+def create_zip(mangaDir, dest_dir):
     global logger
-    logger.debug('createZip({}, {})'.format(mangaDir, dest_dir))
+    logger.debug('create_zip({}, {})'.format(mangaDir, dest_dir))
 
     if not os.path.exists(mangaDir) or not os.path.isdir(mangaDir):
         return False

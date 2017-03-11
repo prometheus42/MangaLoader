@@ -53,7 +53,7 @@ class KissMangaPlugin(PluginBase.PluginBase):
 
     def getListOfChapters(self, manga):
         url = manga.mangaURL
-        result = PluginBase.load_url(url, evaluateJS=True)
+        result = PluginBase.load_url(url, evaluate_js=True)
         if result is None:
             return ()
         parser = PluginBase.ParserBase(('table', 'class', 'listing'), ('a', 'href'))
@@ -65,7 +65,7 @@ class KissMangaPlugin(PluginBase.PluginBase):
 
     def getListOfMangas(self):
         url = '/'.join((self.__domain, 'MangaList?c=a'))
-        result = PluginBase.load_url(url, evaluateJS=True)
+        result = PluginBase.load_url(url, evaluate_js=True)
         if result is None:
             return ()
         print('Finding mangas...')

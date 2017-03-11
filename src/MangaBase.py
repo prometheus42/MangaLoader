@@ -28,7 +28,7 @@ class Manga(object):
 
     def __init__(self, name):
         self.name = name
-        self.chapterList = []
+        self.chapter_list = []
         self.url = ''
         self.internalName = ''
         self.cover_url = ''
@@ -39,17 +39,17 @@ class Manga(object):
 
     def add_chapter(self, chapter):
         chapter.manga = self
-        self.chapterList.append(chapter)
+        self.chapter_list.append(chapter)
 
     def get_chapter(self, number):
-        for chapter in self.chapterList:
+        for chapter in self.chapter_list:
             if chapter.chapterNo == number:
                 return chapter
         return None
 
     def get_chapters(self, numbers):
         result = []
-        for chapter in self.chapterList:
+        for chapter in self.chapter_list:
             if chapter.chapterNo == numbers or chapter.chapterNo in numbers:
                 result.append(chapter)
         return result
@@ -64,8 +64,8 @@ class Chapter(object):
         self.manga = manga
         self.chapterNo = chapter_no
         self.chapterTitle = ''
-        self.chapterURL = ''
-        self.imageList = []
+        self.url = ''
+        self.image_list = []
         self.text = ''
         self.title = ''
 
@@ -77,17 +77,17 @@ class Chapter(object):
 
     def add_image(self, image):
         image.chapter = self
-        self.imageList.append(image)
+        self.image_list.append(image)
         
     def get_image(self, number):
-        for image in self.imageList:
+        for image in self.image_list:
             if image.imageNo == number:
                 return image
         return None
     
     def get_images(self, numbers):
         result = []
-        for image in self.imageList:
+        for image in self.image_list:
             if image.imageNo == numbers or image.imageNo in numbers:
                 result.append(image)
         return result
@@ -98,10 +98,10 @@ class Chapter(object):
 # -------------------------------------------------------------------------------------------------
 class Image(object):
 
-    def __init__(self, chapter, imageNo):
+    def __init__(self, chapter, image_no):
         self.chapter = chapter
-        self.imageNo = imageNo
-        self.imageURL = None
+        self.imageNo = image_no
+        self.url = None
 
     def __str__(self):
         if self.chapter is not None:
@@ -174,8 +174,7 @@ class Loader(object):
         self.pickle_data = pickle_data
         self.image_store_manager = ImageStoreManager(store_directory)
         self.manga_list = None
-        self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX, loader_plugin.__class__.__name__,
-                                                    MANGA_LIST_FILE_SUFFIX)
+        self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX, loader_plugin.__class__.__name__, MANGA_LIST_FILE_SUFFIX)
         if pickle_data:
             self._load_manga_list()
 
@@ -194,48 +193,55 @@ class Loader(object):
                 self.manga_list = pickle.load(f)
             return self.manga_list
         except OSError:
-            logger.warning('No manga list file found.')
+            logger.info('No manga list file found.')
+        except EOFError:
+            logger.error('Manga list file ended unexpectedly.')
 
     def _save_manga_list(self):
         """
         Save current manga list to file. The list will be pickled with the
         highest available protocol the python version supports.
         """
-        #import sys
-        #sys.setrecursionlimit(20000)
+        logger.info('Saving manga list to file.')
+        error = False
         with open(self.manga_list_filename, 'wb') as f:
             # pickle the manga list using the highest protocol available
-            pickle.dump(self.manga_list, f, pickle.HIGHEST_PROTOCOL)
+            try:
+                pickle.dump(self.manga_list, f) #, pickle.HIGHEST_PROTOCOL
+            except RecursionError as e:
+                error = True
+                print(e)
+        if error:
+            os.remove(self.manga_list_filename)
 
-    def get_manga_list(self, update=False):
+    def get_all_mangas(self, update=False):
         if update:
-            self.manga_list = self.loader_plugin.get_manga_list()
+            self.manga_list = self.loader_plugin.load_manga_list()
             # FIXME: Problem with circular dependencies between Manga and Chapter!
-            #if self.pickle_data:
-            #    self._save_manga_list()
+            if self.pickle_data:
+                self._save_manga_list()
         else:
             if not self.manga_list:
                 self.manga_list = self._load_manga_list()
                 if not self.manga_list:
-                    self.manga_list = self.get_manga_list(update=True)
+                    self.manga_list = self.get_all_mangas(update=True)
         return self.manga_list
 
-    def get_manga_for_name(self, manga_name):
+    def get_manga_by_name(self, manga_name):
         """
         Returns a manga object containing a reference to the page of the manga
         with the given name. If no manga with the given name is found, None is
         returned.
         """
-        logger.debug('getting Manga object for manga: {}'.format(manga_name))
-        self.get_manga_list()
+        logger.debug('Getting Manga object for given name: {}'.format(manga_name))
+        self.get_all_mangas()
         for manga in self.manga_list:
-            #print(manga.name, manga_name)
             if manga.name == manga_name:
                 return manga
         return None
 
     def get_all_chapters(self, chosen_manga):
-        return self.loader_plugin.getListOfChapters(chosen_manga)
+        return self.loader_plugin.load_chapter_list(chosen_manga)
 
     def parse_chapter_for_manga(self, manga=None, chapter_no=None, image_no=None, load_images=True, update=False):
         """
@@ -254,29 +260,16 @@ class Loader(object):
 
     def _parse_images_for_chapter(self, manga, chapter_no, image_no):
         for chapter in manga.chapterlist:
-            if chapter_no == None or chapter.number == chapter_no or chapter.number in chapter_no:
+            if chapter_no is None or chapter.number == chapter_no or chapter.number in chapter_no:
                 logger.debug('parsing image list for ' + str(chapter))
-                self.plugin.load_image_list(chapter)
+                self.plugin.load_images_for_chapter(chapter)
                 for image in chapter.imagelist:
-                    if image_no == None or image.number == image_no or image.number in image_no:
+                    if image_no is None or image.number == image_no or image.number in image_no:
                         logger.debug('parsing image url ' + str(image))
                         self.plugin.load_image_url(image)
 
-    def matches(self, search_criteria, value):
-        if search_criteria == None:
-            return True
-        if value == search_criteria:
-            return True
-        try:
-            if value in search_criteria:
-                return True
-        except TypeError:
-            # not iterable
-            pass
-        return False
-
     def handle(self, manga, chapter_list):
-        if manga == None:
+        if manga is None:
             raise RuntimeError('Parameter Manga is None.')
 
         logger.debug('handle({}, {})'.format(str(manga.name), str(chapter_list)))
@@ -292,7 +285,7 @@ class Loader(object):
                 self.load_image(image)
 
     def zip(self, manga, chapter_list):
-        if manga == None:
+        if manga is None:
             raise RuntimeError('Parameter Manga is None.')
 
         logger.debug('zip({}, {})'.format(str(manga.name), str(chapter_list)))
@@ -300,7 +293,7 @@ class Loader(object):
 
         for chapter_no in chapter_list:
             chapter = manga.get_chapter(chapter_no)
-            if chapter == None:
+            if chapter is None:
                 # FIXME: Do we want the program to exit if a wrong chapter no is given?
                 raise RuntimeError('Unable to retrieve chapter ' + str(chapter_no) + ' for manga ' + str(manga))
             manga_dir = self.image_store_manager.get_manga_dir(manga)
@@ -318,7 +311,7 @@ class Loader(object):
 
     def load_image(self, image):
         # calculate destination path and call store_file_on_disk()
-        if self.store_file_on_disk(image.image_url, self.image_store_manager.get_image_path(image)) == False:
+        if not self.store_file_on_disk(image.image_url, self.image_store_manager.get_image_path(image)):
             return False
         logger.info('load: "' + str(image) + '"')
         print('load: "' + str(image) + '"')
@@ -332,8 +325,9 @@ class Loader(object):
             pass
         # open source url and copy to destination file; retry 5 times
         # TODO: Check how to implement retry counter with requests library.
-        tryCounter = 1
+        tries = 1
         while True:
+            import urllib
             try:
                 r = requests.get(source, stream=True)
                 # get file extension for content type
@@ -343,48 +337,50 @@ class Loader(object):
                 parsed = urlparse(source)
                 root, ext = os.path.splitext(parsed.path)
                 if extension != ext:
-                    logger.warn('File extension unclear: {} <-> {}'.format(extension, ext))
+                    logger.warning('File extension unclear: {} <-> {}'.format(extension, ext))
+                if extension is None:
+                    extension = '.jpeg'
+                    logger.warning('Could not guess file extension, using jpeg.')
                 # save data to file if status code 200 was returned
                 if r.status_code == 200:
-                    with open(dest+extension, 'wb') as f:
+                    with open('{}{}'.format(dest,extension), 'wb') as f:
                         # write chunks of default size (128 byte)
                         for chunk in r:
                             f.write(chunk)
-                self.loader_plugin.postprocessImage(dest)
+                self.loader_plugin.postprocess_image(dest)
                 return True
             except urllib.error.URLError:
-                logger.warning('failed to load "' + str(source) + '" (' + str(tryCounter) + ')')
-                if tryCounter >= 5:
+                logger.warning('failed to load "' + str(source) + '" (' + str(tries) + ')')
+                if tries >= 5:
                     logger.error('failed to load "' + str(source) + '"')
                     return False
-            tryCounter = tryCounter + 1
-        return False
+            tries += 1
 
     ############# following are the old methods of this class ##################
 
     def handleChapter2(self, chapter):
         logger.debug('handleChapter({})'.format(chapter))
-        if self.parseChapter(chapter) == False:
+        if not self.parseChapter(chapter):
             return False
-        if self.loadChapter(chapter) == False:
+        if not self.loadChapter(chapter):
             return False
         return True
 
     def handleChapter(self, name, chapterNo):
         logger.debug('handleChapter({}, {})'.format(name, chapterNo))
         chapter = Chapter(Manga(name), chapterNo)
-        if self.parseChapter(chapter) == False:
+        if not self.parseChapter(chapter):
             return False
-        if self.loadChapter(chapter) == False:
+        if not self.loadChapter(chapter):
             return False
         return True
 
     def handleImage(self, name, chapterNo, imageNo):
         logger.debug('handleChapter({}, {}, {})'.format(name, chapterNo, imageNo))
         image = Image(Chapter(Manga(name), chapterNo), imageNo)
-        if self.parseImage(image) == False:
+        if not self.parseImage(image):
             return False
-        if self.loadImage(image) == False:
+        if not self.loadImage(image):
             return False
         return True
 
@@ -392,7 +388,7 @@ class Loader(object):
         logger.debug('zipChapter({}, {})'.format(name, chapterNo))
         manga = Manga(name)
         chapter = Chapter(manga, chapterNo)
-        if MangaZipper.createZip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
+        if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             print('cbz: "' + str(chapter) + '"')
             return True
@@ -400,37 +396,37 @@ class Loader(object):
 
     def zipChapter2(self, manga, chapter):
         logger.debug('zipChapter({}, {})'.format(manga.name, chapter.chapterNo))
-        if MangaZipper.createZip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
+        if MangaZipper.create_zip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             print('cbz: "' + str(chapter) + '"')
             return True
         return False
 
     def parseManga(self, manga):
-        retValue = False
+        return_value = False
         # FIXME Do NOT use maximum number of chapters because "One Piece" :-)
         for i in range(1, 1000):
             chapter = Chapter(manga, i)
-            if self.parseChapter(chapter) == False:
+            if not self.parseChapter(chapter):
                 break
             manga.addChapter(chapter)
-            retValue = True
-        return retValue
+            return_value = True
+        return return_value
 
     def parseChapter(self, chapter):
-        retValue = False
+        return_value = False
         for i in range(1,1000):
             image = Image(chapter, i)
-            if self.parseImage(image) == False:
+            if not self.parseImage(image):
                 break
             chapter.add_image(image)
-            retValue = True
-        return retValue
+            return_value = True
+        return return_value
 
     def parseImage(self, image):
-        if self.loader_plugin == None:
+        if self.loader_plugin is None:
             return False
-        if self.loader_plugin.getImage(image) == False:
+        if not self.loader_plugin.load_image_url(image):
             return False
 
         logger.info('parse: "' + str(image) + '"')
@@ -439,12 +435,12 @@ class Loader(object):
 
     def loadManga(self, manga):
         for chapter in manga.chapterList:
-            if self.loadChapter(chapter) == False:
+            if not self.loadChapter(chapter):
                 return False
         return True
 
     def loadChapter(self, chapter):
-        for image in chapter.imageList:
+        for image in chapter.image_list:
             self.loadImage(image)
         return True
         ######
@@ -458,7 +454,7 @@ class Loader(object):
 
     def loadImage(self, image):
         # calculate destination path and call store_file_on_disk()
-        if self.store_file_on_disk(image.imageUrl, self.image_store_manager.get_image_path(image)) == False:
+        if not self.store_file_on_disk(image.url, self.image_store_manager.get_image_path(image)):
             return False
         logger.info('load: "{}"'.format(image))
         print('load: "{}"'.format(image))

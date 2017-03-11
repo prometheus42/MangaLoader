@@ -17,6 +17,7 @@ from PyQt4 import QtCore
 from MangaBase import Loader
 from gui import viewer
 from src.plugins import MangaFoxPlugin
+from src.plugins import MangaParkPlugin
 
 
 logger = logging.getLogger('MangaLoader.gui')
@@ -31,7 +32,7 @@ class LoaderWindow(QtGui.QWidget):
         super(LoaderWindow, self).__init__(parent)
         self.main_gui = parent
         self.manga_store_path = os.getcwd()
-        self.loader = Loader(MangaFoxPlugin.MangaFoxPlugin(), self.manga_store_path)
+        self.loader = Loader(MangaParkPlugin.MangaParkPlugin(), self.manga_store_path)
         self.manga_list = []
         self.create_fonts()
         self.setup_ui()
@@ -93,7 +94,7 @@ class LoaderWindow(QtGui.QWidget):
         completer.setCompletionMode(QtGui.QCompleter.UnfilteredPopupCompletion)  # PopupCompletion
         self.mangaComboBox.setCompleter(completer)
         # get list of mangas from Loader and populate combo box
-        self.manga_list = self.loader.get_manga_list(update=False)
+        self.manga_list = self.loader.get_all_mangas(update=False)
         for manga in self.manga_list:
             self.mangaComboBox.addItem(manga.name, userData=manga)
         return self.mangaComboBox
@@ -110,7 +111,7 @@ class LoaderWindow(QtGui.QWidget):
     @QtCore.pyqtSlot()
     def on_update_manga_list(self):
         # TODO Load mangas in background and update combo box regularly?!
-        self.manga_list = self.loader.get_manga_list(update=True)
+        self.manga_list = self.loader.get_all_mangas(update=True)
         # load combo box with items from manga list
         for manga in self.manga_list:
             self.mangaComboBox.addItem(manga.name, userData=manga)
@@ -183,7 +184,7 @@ class LoaderWindow(QtGui.QWidget):
         viewer_window.setWindowState(QtCore.Qt.WindowMaximized)
         viewer_window.setWindowTitle('MangaLoader Viewer')
         chosen_manga = self.mangaComboBox.itemData(self.mangaComboBox.currentIndex())
-        self.currentChapterList = self.plugin.getListOfChapters(chosen_manga)
+        self.currentChapterList = self.plugin.load_chapter_list(chosen_manga)
         for c in self.currentChapterList:
             if c.chapterNo == self.chapter_begin.value():
                 chosen_chapter = c

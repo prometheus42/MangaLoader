@@ -14,32 +14,37 @@ logger = logging.getLogger('MangaLoader.PluginBase')
 
 
 # -------------------------------------------------------------------------------------------------
-#  Parser class
+#  PluginBase class
 # -------------------------------------------------------------------------------------------------
 class PluginBase(object):
 
-    def getImage(self, image):
+    def load_image_url(self, image):
         """Gets an image URL for a specific manga from a specific chapter. The
         URL is stored in the given Image object.
 
         :return: true, when a valid image URL for wanted image could be found"""
         raise NotImplementedError()
 
-    def getListOfChapters(self, manga):
+    def load_images_for_chapter(self, chapter):
+        """Creates Image objects for all individual images of a given chapter and stores the URLs for those images.
+
+        :param chapter: chapter for which to load images
+        :return: list of all images"""
+        raise NotImplementedError()
+
+    def load_chapter_list(self, manga):
         """Gets a list of all current chapters from a given manga.
 
         :param manga: identifier for a available manga on this site.
-        :return: list of identifiers for all chapters of this manga currently
-                 available at this site."""
+        :return: list of chapter objects for all chapters of this manga currently available at this site."""
         raise NotImplementedError()
 
-    def getListOfMangas(self):
+    def load_manga_list(self):
         """Gets the current list of all available mangas from a given site."""
         raise NotImplementedError()
 
-    def postprocessImage(self, filename):
-        """Processes the loaded image of a manga page after it has been down-
-        loaded."""
+    def postprocess_image(self, filename):
+        """Processes the loaded image of a manga page after it has been downloaded."""
         raise NotImplementedError()
 
 
@@ -79,10 +84,10 @@ class ParserBase(HTMLParser):
     def handle_starttag(self, tag, attrs):
         """Searches for the outer tag and looks for the begin of the inner tag
         when inside the outer tag."""
-        self.findOuterTagStart(tag, attrs)
+        self.find_outer_tag_start(tag, attrs)
         if self.__insideOuterTag:
-            self.increaseOuterCount(tag)
-            self.findInnerTag(tag, attrs)
+            self.increase_outer_count(tag)
+            self.find_inner_tag(tag, attrs)
 
     def handle_data(self, data):
         """Handles data only inside the given outer tag and stores the data
@@ -94,9 +99,9 @@ class ParserBase(HTMLParser):
     def handle_endtag(self, tag):
         """Decreases inner tag count when end tag was reached."""
         if self.__insideOuterTag:
-            self.decreaseOuterCount(tag)
+            self.decrease_outer_count(tag)
 
-    def findOuterTagStart(self, tag, attrs):
+    def find_outer_tag_start(self, tag, attrs):
         """Check whether the current tag is the outer tag to search for."""
         global logger
 
@@ -111,20 +116,20 @@ class ParserBase(HTMLParser):
             else:
                 self.__insideOuterTag = True
 
-    def increaseOuterCount(self, tag):
+    def increase_outer_count(self, tag):
         """Increases the current level of outer tags inside the outer tag."""
         if tag == self.__outerTag:
-            self.__outerCount = self.__outerCount + 1
+            self.__outerCount += 1
 
-    def decreaseOuterCount(self, tag):
+    def decrease_outer_count(self, tag):
         """Decreases the current level of outer tags inside the outer tag. If
         the count reaches zero, this is the outer end tag."""
         if tag == self.__outerTag:
-            self.__outerCount = self.__outerCount - 1
+            self.__outerCount -= 1
         if self.__outerCount == 0:
             self.__insideOuterTag = False
 
-    def findInnerTag(self, tag, attrs):
+    def find_inner_tag(self, tag, attrs):
         """Check whether the current tag is the inner tag to search for."""
         global logger
         if self.__insideOuterTag:
@@ -133,7 +138,7 @@ class ParserBase(HTMLParser):
                     if attr[0] == self.__innerAttrib:
                         self.targetValue = attr[1]
                         self.targetValues.append(attr[1])
-                        self.targetCount = self.targetCount + 1
+                        self.targetCount += 1
                         break
 
     def error(self, message):
@@ -194,7 +199,7 @@ def find_re_in_site(url, regex):
 # -------------------------------------------------------------------------------------------------
 #  loadURL
 # -------------------------------------------------------------------------------------------------
-def load_url(url, maxTryCount=5, evaluateJS=False):
+def load_url(url, max_try_count=5, evaluate_js=False):
     """Load content of a given URL and return the pages source.
     
     Sources:
@@ -204,11 +209,8 @@ def load_url(url, maxTryCount=5, evaluateJS=False):
     logger.debug('Start loading URL "{}".'.format(str(url)))
 
     agent_string = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0'
-    #'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0'
-    #'Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
-    #'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:26.0) Gecko/20100101 Firefox/26.0'
-    
-    if evaluateJS:
+
+    if evaluate_js:
         # render web page in browser with JS and get result from there
         import dryscrape
         session = dryscrape.Session()
@@ -217,10 +219,10 @@ def load_url(url, maxTryCount=5, evaluateJS=False):
         print(result)
         return result
     else:
-        headers = { 'User-Agent' : agent_string }
+        headers = {'User-Agent': agent_string}
         try:
             logger.debug('requesting: {}'.format(url))
-            request = requests.get(url)#, max_retries=maxTryCount)
+            request = requests.get(url)
             if request.status_code == 200:
                 result = request.text
                 logger.debug('URL successfully loaded.')
