@@ -12,6 +12,7 @@ from html.parser import HTMLParser
 
 logger = logging.getLogger('MangaLoader.PluginBase')
 
+
 # -------------------------------------------------------------------------------------------------
 #  Parser class
 # -------------------------------------------------------------------------------------------------
@@ -39,7 +40,8 @@ class PluginBase(object):
     def postprocessImage(self, filename):
         """Processes the loaded image of a manga page after it has been down-
         loaded."""
-        pass
+        raise NotImplementedError()
+
 
 # -------------------------------------------------------------------------------------------------
 #  Parser class
@@ -134,6 +136,9 @@ class ParserBase(HTMLParser):
                         self.targetCount = self.targetCount + 1
                         break
 
+    def error(self, message):
+        logger.error('Error while parsing HTML: {}'.format(message))
+
 
 # -------------------------------------------------------------------------------------------------
 #  FindTagParser
@@ -166,8 +171,12 @@ class FindTagParser(HTMLParser):
                         self.targetCount += 1
                         self.targetValue = self.link
 
+    def error(self, message):
+        logger.error('Error while parsing HTML: {}'.format(message))
+
+
 # -------------------------------------------------------------------------------------------------
-#  loadURL
+#  find_re_in_site
 # -------------------------------------------------------------------------------------------------
 def find_re_in_site(url, regex):
     """Opens a site, downloads its content and check with a regular expression
@@ -185,7 +194,7 @@ def find_re_in_site(url, regex):
 # -------------------------------------------------------------------------------------------------
 #  loadURL
 # -------------------------------------------------------------------------------------------------
-def loadURL(url, maxTryCount=5, evaluateJS=False):
+def load_url(url, maxTryCount=5, evaluateJS=False):
     """Load content of a given URL and return the pages source.
     
     Sources:
@@ -219,7 +228,7 @@ def loadURL(url, maxTryCount=5, evaluateJS=False):
                 result = ''
                 logger.warn('URL could not be loaded.')
             return result
-        except requests.exception.ConnectionError:
+        except requests.exceptions.ConnectionError:
             logger.warn('URL could not be loaded.')
 
 

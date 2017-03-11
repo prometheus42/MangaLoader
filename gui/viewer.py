@@ -37,7 +37,7 @@ class ImageView(QtGui.QWidget):
         self.base_dir = base_dir
         self.start_with_chapter = start_with_chapter
         self.start_with_manga = start_with_manga
-        path_builder = MangaBase.PathBuilder(base_dir)
+        path_builder = MangaBase.ImageStoreManager(base_dir)
         self.image_switcher = path_builder.find_next_image(start_with_manga, start_with_chapter)
         self.create_fonts()
         self.setup_ui()

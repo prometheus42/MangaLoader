@@ -1,6 +1,9 @@
 TODO
 ----
 
+- rename all modules to simple lower-case names
+- move writing to file and reading from file into ImageStoreManager class
+
 - fix encoding for zipper
 - BUG: uses wrong Manga image destination names for MangaHere downloads
 - BUG: zipper error, if dir does not exist (e.g. if manga is at the end)

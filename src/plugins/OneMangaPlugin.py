@@ -41,7 +41,7 @@ class OneMangaPlugin(PluginBase.PluginBase):
             # otherwise take given chapter URL and concatenate only page number
             url = chapter.chapterURL + str(image.imageNo)
         logger.debug('Parsing URL "{}" for manga page.'.format(url))
-        result = PluginBase.loadURL(url)
+        result = PluginBase.load_url(url)
         if result is None:
             return False
 
@@ -77,7 +77,7 @@ class OneMangaPlugin(PluginBase.PluginBase):
         url = manga.mangaURL
         logger.info('Looking for chapters of manga "{}" ({}).'.format(manga.name, manga.mangaURL))
         logger.info('Finding chapters...')
-        result = PluginBase.loadURL(url)
+        result = PluginBase.load_url(url)
         if result is None:
             return False
         parser = PluginBase.ParserBase(('ul', 'class', 'lst'), ('a', 'href'))
@@ -120,7 +120,7 @@ class OneMangaPlugin(PluginBase.PluginBase):
             # that there are 49 pages!
             url = searchURL + str(i)
             logger.debug('Reading manga list from url "{}".'.format(url))
-            result = PluginBase.loadURL(url)
+            result = PluginBase.load_url(url)
             if result is None:
                 return False
             parser = PluginBase.ParserBase(('div', 'class', 'det'), ('a', 'href'))
@@ -129,7 +129,7 @@ class OneMangaPlugin(PluginBase.PluginBase):
                 for name, link in islice(zip(parser.targetData, parser.targetValues),
                                          COUNT_PER_PAGE):
                     m = Manga(name)
-                    m.mangaURL = link
+                    m.url = link
                     internalName = link.replace(BASE_URL, '').replace('/', '')
                     m.internalName = internalName
                     list_of_all_manga_links.append(link)

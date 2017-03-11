@@ -20,6 +20,7 @@ logger = logging.getLogger('MangaLoader.MangaFoxPlugin')
 BASE_URL = 'http://mangafox.me/'
 MANGA_LIST_URL = BASE_URL + 'manga/'
 
+
 # -------------------------------------------------------------------------------------------------
 #  Plugin class
 # -------------------------------------------------------------------------------------------------
@@ -32,12 +33,11 @@ class MangaFoxPlugin(PluginBase.PluginBase):
     
     @memoized
     def get_manga_list(self):
-        response = load_url(MANGA_LIST_URL)
-        return self._parse_manga_list(response)
+        loaded_manga_list = PluginBase.load_url(MANGA_LIST_URL)
+        return self._parse_manga_list(loaded_manga_list)
     
     def _parse_manga_list(self, data):
         doc = BeautifulSoup(data, 'html.parser')
-        
         result = []
         for div in doc.find_all('div', class_='manga_list'):
             for li in div.find_all('li'):
@@ -50,7 +50,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
     
     @memoized
     def load_chapter_list(self, manga):
-        response = load_url(manga.url)
+        response = PluginBase.load_url(manga.url)
         for chapter in self._parse_chapter_list(response):
             manga.add_chapter(chapter)
     
@@ -76,7 +76,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
     
     @memoized
     def load_image_list(self, chapter):
-        response = load_url(chapter.url)
+        response = PluginBase.load_url(chapter.url)
         for image in self._parse_image_list(chapter.url, response):
             chapter.add_image(image)
     
@@ -105,7 +105,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
     
     @memoized
     def load_image_url(self, image):
-        response = load_url(image.url)
+        response = PluginBase.load_url(image.url)
         image.image_url = self._parse_image_url(response)
     
     def _parse_image_url(self, data):
@@ -142,7 +142,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
             logger.warning('Could not find wanted image. ')
             return False
 
-        result = PluginBase.loadURL(url)
+        result = PluginBase.load_url(url)
         if result is None:
             return False
 
@@ -176,11 +176,10 @@ class MangaFoxPlugin(PluginBase.PluginBase):
                       including its name and the link of the main site
         :return: a list of chapters with all necessary information like their URLs
         """
-        url = manga.mangaURL
-        result = PluginBase.loadURL(url)
+        result = PluginBase.load_url(manga.url)
         #if result is None:
         #    return []
-        logger.info('Looking for chapters of manga "{}" ({}).'.format(manga.name, manga.mangaURL))
+        logger.info('Looking for chapters of manga "{}" ({}).'.format(manga.name, manga.url))
         list_of_chapters = []
         soup = BeautifulSoup(result, 'html.parser')
         for ul in soup.findAll('ul', class_='chlist'):
@@ -198,7 +197,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
                 else:
                     title = ''
                 # create Chapter object
-                chapter = Chapter(manga.name, number)
+                chapter = Chapter(manga, number)
                 chapter.chapterURL = link
                 chapter.text = text
                 chapter.title = title
@@ -237,7 +236,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
 
     def getListOfMangas(self):
         url = '/'.join((self.__domain, 'manga'))
-        result = PluginBase.loadURL(url)
+        result = PluginBase.load_url(url)
         #if result is None:
         #    return []
         print('Finding mangas...')
@@ -256,7 +255,7 @@ class MangaFoxPlugin(PluginBase.PluginBase):
                 name = a.get_text()
                 # create Manga object
                 m = Manga(name)
-                m.mangaURL = link
+                m.url = link
                 m.is_open = is_open
                 list_of_all_mangas.append(m)        
         print('Found {} mangas on site!'.format(len(list_of_all_mangas)))

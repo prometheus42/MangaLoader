@@ -25,7 +25,7 @@ class MangaReaderPlugin(PluginBase.PluginBase):
 		chapter = image.chapter
 		
 		url = self.__domain + '/' + self.__getInternalName(manga.name) + '/' + str(chapter.chapterNo) + '/' + str(image.imageNo)
-		result = PluginBase.loadURL(url)
+		result = PluginBase.load_url(url)
 		
 		if result is None:
 			return False

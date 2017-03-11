@@ -9,8 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
-from . import MangaZipper
-from src.helper import memoized
+import MangaZipper
 
 
 # -------------------------------------------------------------------------------------------------
@@ -30,14 +29,15 @@ class Manga(object):
     def __init__(self, name):
         self.name = name
         self.chapterList = []
-        self.mangaURL = ''
+        self.url = ''
         self.internalName = ''
+        self.cover_url = ''
         self.is_open = None
 
     def __str__(self):
         return str(self.name)
 
-    def addChapter(self, chapter):
+    def add_chapter(self, chapter):
         chapter.manga = self
         self.chapterList.append(chapter)
 
@@ -60,9 +60,9 @@ class Manga(object):
 # -------------------------------------------------------------------------------------------------
 class Chapter(object):
 
-    def __init__(self, manga, chapterNo):
+    def __init__(self, manga, chapter_no):
         self.manga = manga
-        self.chapterNo = chapterNo
+        self.chapterNo = chapter_no
         self.chapterTitle = ''
         self.chapterURL = ''
         self.imageList = []
@@ -70,12 +70,12 @@ class Chapter(object):
         self.title = ''
 
     def __str__(self):
-        if self.manga != None:
+        if self.manga is not None:
             return str(self.manga) + ' ' + str(self.chapterNo)
         else:
             return str(self.chapterNo)
 
-    def addImage(self, image):
+    def add_image(self, image):
         image.chapter = self
         self.imageList.append(image)
         
@@ -104,29 +104,25 @@ class Image(object):
         self.imageURL = None
 
     def __str__(self):
-        if self.chapter != None:
+        if self.chapter is not None:
             return str(self.chapter) + ' - ' + str(self.imageNo)
         else:
             return str(self.imageNo)
 
 
 # -------------------------------------------------------------------------------------------------
-#  PathBuilder class
+#  ImageStoreManager class
 # -------------------------------------------------------------------------------------------------
-class PathBuilder(object):
+class ImageStoreManager(object):
 
     def __init__(self, base_dir):
         self.base_dir = base_dir
 
     def get_manga_dir(self, manga):
-        if type(manga) == Manga:
-            return os.path.join(self.base_dir, manga.name)
-        elif type(manga) == str:
-            return os.path.join(self.base_dir, manga)
-        else:
-            logger.error('Wrong type of parameter "manga"!')
+        return os.path.join(self.base_dir, manga.name)
 
     def get_chapter_dir(self, chapter):
+        print(self.get_manga_dir(chapter.manga), chapter.manga, chapter.chapterNo)
         return os.path.join(self.get_manga_dir(chapter.manga), '{name} {no:03d}'.format(name=chapter.manga, no=chapter.chapterNo))
 
     def get_image_path(self, image, include_extension=False):
@@ -137,11 +133,11 @@ class PathBuilder(object):
         of the HTTP response.
         """
         if include_extension:
-            imageExtension = '.' + os.path.splitext(image.imageUrl)
+            image_extension = '.' + os.path.splitext(image.imageUrl)
         else:
-            imageExtension = ''
+            image_extension = ''
         return os.path.join(self.get_chapter_dir(image.chapter),
-                            '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo,Ext=imageExtension))
+                            '{ImageNo:03d}{Ext}'.format(ImageNo=image.imageNo,Ext=image_extension))
 
     def find_next_image(self, start_with_manga, start_with_chapter):
         """
@@ -160,42 +156,63 @@ class PathBuilder(object):
             # TODO: Handle this better!!!
             start_with_chapter.chapterNo += 1
 
+    def do_image_already_exists(self, image):
+        """
+        Checks whether a given image is already present in the image store.
+        """
+        return os.path.exists(self.get_image_path(image, include_extension=True))
+
 
 # -------------------------------------------------------------------------------------------------
 #  Loader class
 # -------------------------------------------------------------------------------------------------
 class Loader(object):
 
-    def __init__(self, loaderPlugin, destDir):
-        self.loaderPlugin = loaderPlugin
-        self.destDir = destDir
-        self.path_builder = PathBuilder(destDir)
+    def __init__(self, loader_plugin, store_directory, pickle_data=True):
+        self.loader_plugin = loader_plugin
+        self.__store_directory = store_directory
+        self.pickle_data = pickle_data
+        self.image_store_manager = ImageStoreManager(store_directory)
         self.manga_list = None
-        self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX,
-                                                    loaderPlugin.__class__.__name__,
+        self.manga_list_filename = '{}-{}{}'.format(MANGA_LIST_FILE_PREFIX, loader_plugin.__class__.__name__,
                                                     MANGA_LIST_FILE_SUFFIX)
+        if pickle_data:
+            self._load_manga_list()
+
+    @property
+    def store_directory(self):
+        return self.__store_directory
+
+    @store_directory.setter
+    def store_directory(self, value):
+        self.__store_directory = value
+        self.image_store_manager.base_dir = value
 
     def _load_manga_list(self):
         try:
             with open(self.manga_list_filename, 'rb') as f:
-                manga_list = pickle.load(f)
-            return manga_list
-        except FileNotFoundError:
-            logger.warn('No manga list file found.')
+                self.manga_list = pickle.load(f)
+            return self.manga_list
+        except OSError:
+            logger.warning('No manga list file found.')
 
     def _save_manga_list(self):
         """
         Save current manga list to file. The list will be pickled with the
         highest available protocol the python version supports.
         """
+        #import sys
+        #sys.setrecursionlimit(20000)
         with open(self.manga_list_filename, 'wb') as f:
+            # pickle the manga list using the highest protocol available
             pickle.dump(self.manga_list, f, pickle.HIGHEST_PROTOCOL)
 
-    def get_manga_list(self, update=True):
+    def get_manga_list(self, update=False):
         if update:
-            self.manga_list = self.plugin.get_manga_list()
+            self.manga_list = self.loader_plugin.get_manga_list()
             # FIXME: Problem with circular dependencies between Manga and Chapter!
-            #self._save_manga_list()
+            #if self.pickle_data:
+            #    self._save_manga_list()
         else:
             if not self.manga_list:
                 self.manga_list = self._load_manga_list()
@@ -216,6 +233,9 @@ class Loader(object):
             if manga.name == manga_name:
                 return manga
         return None
+
+    def get_all_chapters(self, chosen_manga):
+        return self.loader_plugin.getListOfChapters(chosen_manga)
 
     def parse_chapter_for_manga(self, manga=None, chapter_no=None, image_no=None, load_images=True, update=False):
         """
@@ -283,8 +303,8 @@ class Loader(object):
             if chapter == None:
                 # FIXME: Do we want the program to exit if a wrong chapter no is given?
                 raise RuntimeError('Unable to retrieve chapter ' + str(chapter_no) + ' for manga ' + str(manga))
-            manga_dir = self.path_builder.get_manga_dir(manga)
-            chapter_dir = self.path_builder.get_chapter_dir(chapter)
+            manga_dir = self.image_store_manager.get_manga_dir(manga)
+            chapter_dir = self.image_store_manager.get_chapter_dir(chapter)
             MangaZipper.create_zip(chapter_dir, manga_dir)
             logger.info('cbz: "' + str(chapter) + '"')
 
@@ -298,7 +318,7 @@ class Loader(object):
 
     def load_image(self, image):
         # calculate destination path and call store_file_on_disk()
-        if self.store_file_on_disk(image.image_url, self.path_builder.get_image_path(image)) == False:
+        if self.store_file_on_disk(image.image_url, self.image_store_manager.get_image_path(image)) == False:
             return False
         logger.info('load: "' + str(image) + '"')
         print('load: "' + str(image) + '"')
@@ -330,7 +350,7 @@ class Loader(object):
                         # write chunks of default size (128 byte)
                         for chunk in r:
                             f.write(chunk)
-                self.loaderPlugin.postprocessImage(dest)
+                self.loader_plugin.postprocessImage(dest)
                 return True
             except urllib.error.URLError:
                 logger.warning('failed to load "' + str(source) + '" (' + str(tryCounter) + ')')
@@ -372,7 +392,7 @@ class Loader(object):
         logger.debug('zipChapter({}, {})'.format(name, chapterNo))
         manga = Manga(name)
         chapter = Chapter(manga, chapterNo)
-        if MangaZipper.createZip(self.path_builder.get_chapter_dir(chapter), self.path_builder.get_manga_dir(manga)):
+        if MangaZipper.createZip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             print('cbz: "' + str(chapter) + '"')
             return True
@@ -380,7 +400,7 @@ class Loader(object):
 
     def zipChapter2(self, manga, chapter):
         logger.debug('zipChapter({}, {})'.format(manga.name, chapter.chapterNo))
-        if MangaZipper.createZip(self.path_builder.get_chapter_dir(chapter), self.path_builder.get_manga_dir(manga)):
+        if MangaZipper.createZip(self.image_store_manager.get_chapter_dir(chapter), self.image_store_manager.get_manga_dir(manga)):
             logger.info('cbz: "' + str(chapter) + '"')
             print('cbz: "' + str(chapter) + '"')
             return True
@@ -403,14 +423,14 @@ class Loader(object):
             image = Image(chapter, i)
             if self.parseImage(image) == False:
                 break
-            chapter.addImage(image)
+            chapter.add_image(image)
             retValue = True
         return retValue
 
     def parseImage(self, image):
-        if self.loaderPlugin == None:
+        if self.loader_plugin == None:
             return False
-        if self.loaderPlugin.getImage(image) == False:
+        if self.loader_plugin.getImage(image) == False:
             return False
 
         logger.info('parse: "' + str(image) + '"')
@@ -438,7 +458,7 @@ class Loader(object):
 
     def loadImage(self, image):
         # calculate destination path and call store_file_on_disk()
-        if self.store_file_on_disk(image.imageUrl, self.path_builder.get_image_path(image)) == False:
+        if self.store_file_on_disk(image.imageUrl, self.image_store_manager.get_image_path(image)) == False:
             return False
         logger.info('load: "{}"'.format(image))
         print('load: "{}"'.format(image))

@@ -53,7 +53,7 @@ class KissMangaPlugin(PluginBase.PluginBase):
 
     def getListOfChapters(self, manga):
         url = manga.mangaURL
-        result = PluginBase.loadURL(url, evaluateJS=True)
+        result = PluginBase.load_url(url, evaluateJS=True)
         if result is None:
             return ()
         parser = PluginBase.ParserBase(('table', 'class', 'listing'), ('a', 'href'))
@@ -65,7 +65,7 @@ class KissMangaPlugin(PluginBase.PluginBase):
 
     def getListOfMangas(self):
         url = '/'.join((self.__domain, 'MangaList?c=a'))
-        result = PluginBase.loadURL(url, evaluateJS=True)
+        result = PluginBase.load_url(url, evaluateJS=True)
         if result is None:
             return ()
         print('Finding mangas...')
@@ -77,15 +77,15 @@ class KissMangaPlugin(PluginBase.PluginBase):
         if parser.targetCount > 1:
             for name, link in zip(parser.targetData, parser.targetValues):
                 m = Manga(name)
-                m.mangaURL = link
-                print(m, m.mangaURL)
+                m.url = link
+                print(m, m.url)
                 list_of_all_mangas.append(m)
         else:
             m = Manga('One Piece')
-            m.mangaURL = 'http://kissmanga.com/Manga/One-Piece'
+            m.url = 'http://kissmanga.com/Manga/One-Piece'
             list_of_all_mangas.append(m)
             m = Manga('Coppelion')
-            m.mangaURL = 'http://kissmanga.com/Manga/Coppelion'
+            m.url = 'http://kissmanga.com/Manga/Coppelion'
             list_of_all_mangas.append(m)
             logger.warning('No mangas found on site.')
         return list_of_all_mangas

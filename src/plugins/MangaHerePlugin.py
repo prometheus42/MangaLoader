@@ -27,7 +27,7 @@ class MangaHerePlugin(PluginBase.PluginBase):
 		chapter = image.chapter
 		
 		url = self.__domain + '/' + self.__getInternalName(manga.name) + '/c' + ('%03d' % chapter.chapterNo) + '/' + str(image.imageNo) + '.html'
-		result = PluginBase.loadURL(url)
+		result = PluginBase.load_url(url)
 		
 		if result is None:
 			return False
