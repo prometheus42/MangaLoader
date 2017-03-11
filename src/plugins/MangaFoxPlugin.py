@@ -7,7 +7,7 @@ from PIL import Image
 from bs4 import BeautifulSoup
 
 import src.PluginBase as PluginBase
-from src.MangaBase import Manga
+from data import Manga, Chapter
 from src.MangaBase import Chapter
 from src.helper import memoized
 

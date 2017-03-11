@@ -3,7 +3,7 @@ MangaLoader - A free manga downloader
 
 DESCRIPTION
 -----------
-MangaLoader retrives mangas from free online manga reading site (e.g. MangaReader.net)
+MangaLoader retrieves manga from free online manga reading site (e.g. MangaReader.net)
 
 
 LICENSE

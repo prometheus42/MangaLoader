@@ -6,9 +6,6 @@ import logging
 import requests
 from html.parser import HTMLParser
 
-# -------------------------------------------------------------------------------------------------
-#  logging
-# -------------------------------------------------------------------------------------------------
 
 logger = logging.getLogger('MangaLoader.PluginBase')
 

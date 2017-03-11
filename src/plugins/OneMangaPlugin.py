@@ -5,7 +5,7 @@ import re
 from itertools import islice
 
 import src.PluginBase as PluginBase
-from src.MangaBase import Manga
+from data import Manga, Chapter
 from src.MangaBase import Chapter
 from src.helper import memoized
 

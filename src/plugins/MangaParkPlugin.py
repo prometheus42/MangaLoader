@@ -6,7 +6,7 @@ import urllib.parse
 from bs4 import BeautifulSoup
 
 import src.PluginBase as PluginBase
-from src.MangaBase import Manga
+from data import Manga, Chapter, Image
 from src.MangaBase import Chapter
 from src.MangaBase import Image
 from src.helper import memoized
